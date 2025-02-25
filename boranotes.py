@@ -193,6 +193,8 @@ class NotesApp(QWidget):
 
         self.text_editor.setAcceptRichText(True)
         self.setup_shortcuts()
+        self.splitter.splitterMoved.connect(self.check_list_visibility)
+
 
     def initUI(self):
         layout = QVBoxLayout()
@@ -202,13 +204,14 @@ class NotesApp(QWidget):
 
         self.left_container = QWidget()
         self.left_container.setMinimumWidth(10)
+        self.left_container.setMaximumWidth(self.width() - 30)
         left_layout = QVBoxLayout(self.left_container)
         left_layout.setContentsMargins(0, 0, 0, 0)
 
         self.search_bar = QLineEdit()
         self.search_bar.setFixedHeight(24)
         self.search_bar.setPlaceholderText("Поиск по записям")
-        self.search_bar.setStyleSheet("background-color: #D1C4E9; padding-left: 10px; border: 0.5px solid #efe2e7; border-radius: 4px; box-shadow: 0 2px 4px rgba(248, 241, 243, 0.3);")
+        self.search_bar.setStyleSheet("background-color: #D1C4E9; padding-left: 10px; border: 0.5px solid #efe2e7; border-radius: 4px;")
         self.search_bar.textChanged.connect(self.search_notes)
         left_layout.addWidget(self.search_bar)
 
@@ -218,6 +221,7 @@ class NotesApp(QWidget):
         left_layout.addWidget(self.notes_list)
 
         self.right_container = QWidget()
+        self.right_container.setMinimumWidth(90)
         self.right_layout = QVBoxLayout(self.right_container)
         self.right_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -263,33 +267,32 @@ class NotesApp(QWidget):
 
         self.text_editor = CustomTextEdit()
         self.text_editor.setStyleSheet("""
-        QTextEdit { 
-            background-color: transparent; 
-            border: none; 
-        }
-        QScrollBar:vertical {
-            border: none;
-            background: #EDE7F6;
-            width: 8px;
-            border-radius: 4px;
-            margin: 4px 4px 4px 0;
-        }
-        QScrollBar::handle:vertical {
-            background: #B39DDB;
-            border-radius: 2px;
-            min-height: 20px;
-        }
-        QScrollBar::add-line:vertical,
-        QScrollBar::sub-line:vertical {
-            border: none;
-            background: none;
-            height: 0;
-        }
-        QScrollBar:horizontal {
-            height: 0;
-        }
-    """)
-        
+            QTextEdit { 
+                background-color: transparent; 
+                border: none; 
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #EDE7F6;
+                width: 7px;
+                border-radius: 4px;
+                margin: 4px 4px 4px 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #B39DDB;
+                border-radius: 4px;
+                min-height: 20px;
+            }
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0;
+            }
+            QScrollBar:horizontal {
+                height: 0;
+            }
+        """)
         self.text_editor.setFont(QFont("Calibri", 12))
         self.text_editor.textChanged.connect(self.auto_save)
         self.text_editor.textChanged.connect(self.auto_format)
@@ -304,6 +307,8 @@ class NotesApp(QWidget):
         self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 3)
         self.splitter.setSizes([self.initial_notes_list_width, 600])
+        self.splitter.setCollapsible(1, False)
+        self.splitter.setHandleWidth(1)
 
         layout.addWidget(self.splitter)
 
@@ -321,6 +326,18 @@ class NotesApp(QWidget):
         layout.addWidget(bottom_panel)
         self.setLayout(layout)
         self.text_editor.textChanged.connect(self.update_counter)
+
+    def resizeEvent(self, event):
+        self.left_container.setMaximumWidth(self.width() - 90)
+        super().resizeEvent(event)
+
+    def check_list_visibility(self, pos, index):
+        if pos <= 10:
+            self.is_notes_list_visible = False
+            self.toggle_button.setText("▶")
+        else:
+            self.is_notes_list_visible = True
+            self.toggle_button.setText("◀")
 
     def toggle_notes_list(self):
         if self.is_notes_list_visible:

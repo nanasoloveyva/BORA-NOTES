@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QListWidget, QListWidgetItem,
-    QTextEdit, QHBoxLayout, QLineEdit, QLabel, QMessageBox, QCheckBox, QSplitter
+    QTextEdit, QHBoxLayout, QLineEdit, QLabel, QMessageBox, QCheckBox, QSplitter, QMenu
 )
 from PyQt6.QtGui import (
     QFont, QIcon, QTextCursor, QTextCharFormat, QShortcut, QKeySequence, QColor
@@ -27,9 +27,8 @@ class CustomTextEdit(QTextEdit):
         super().__init__(parent)
         self.default_font = QFont("Calibri", 12)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.customContextMenuRequested.connect(self.showCustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_custom_context_menu)
         
-        # Стили для QTextEdit и скроллбара
         self.setStyleSheet("""
             QTextEdit {
                 border: none;
@@ -51,41 +50,35 @@ class CustomTextEdit(QTextEdit):
             QScrollBar::sub-line:vertical {
                 border: none;
                 background: none;
+                height: 0;
             }
             QScrollBar:horizontal {
                 height: 0;
             }
         """)
 
-    def insertFromMimeData(self, source: QMimeData):
-        cursor = self.textCursor()
-        default_format = QTextCharFormat()
-        default_format.setFont(self.default_font)
-        cursor.insertText(source.text())
-        cursor.select(QTextCursor.SelectionType.Document)
-        cursor.mergeCharFormat(default_format)
-
-    def createStandardContextMenu(self):
-        menu = super().createStandardContextMenu()
-        menu.setFont(QFont("Calibri", 9))
+    def show_custom_context_menu(self, position):
+        custom_menu = QMenu(self)
+        custom_menu.setFont(QFont("Calibri", 9))
         
         style = """
             QMenu {
-                background-color: #FFFFFF;
+                background-color: rgba(255, 255, 255, 0.95);
                 border: 0.5px solid #efe2e7;
                 border-radius: 10px;
                 padding: 5px;
             }
             QMenu::item {
                 color: #7f7377;
-                padding: 5px 20px 5px 35px;
+                padding: 5px 20px 5px 10px;
                 margin: 2px 8px;
                 border-radius: 5px;
-                min-width: 120px;
+                min-width: 180px;
             }
             QMenu::item:selected {
-                background-color: #D1C4E9;
-                color: white;
+                background-color: #ece0f2;
+                color: #7f7377;
+                border-radius: 5px;
             }
             QMenu::item:disabled {
                 color: #bbb;
@@ -96,29 +89,68 @@ class CustomTextEdit(QTextEdit):
                 background-color: #efe2e7;
                 margin: 3px 10px;
             }
+            QMenu::right-arrow {
+                border-radius: 10px;
+            }
         """
-        menu.setStyleSheet(style)
+        custom_menu.setStyleSheet(style)
 
-        action_translations = {
-            "Cu&t": "Вырезать",
-            "&Copy": "Копировать",
-            "&Paste": "Вставить",
-            "&Delete": "Удалить",
-            "Select &All": "Выделить всё",
-            "&Undo": "Отменить",
-            "&Redo": "Повторить"
-        }
+        undo_action = custom_menu.addAction(" ↩️  Отменить ")
+        undo_action.triggered.connect(self.undo)
         
-        for action in menu.actions():
-            if action.text() in action_translations:
-                action.setText(action_translations[action.text()])
+        redo_action = custom_menu.addAction(" ↪️  Повторить ")
+        redo_action.triggered.connect(self.redo)
         
-        return menu
+        custom_menu.addSeparator()
 
-    def showCustomContextMenu(self, pos):
-        menu = self.createStandardContextMenu()
-        menu.exec(self.mapToGlobal(pos))
+        format_menu = custom_menu.addMenu(" ✒️  Форматирование                  ▶")
+        format_menu.setStyleSheet(style)
+        
+        bold_action = format_menu.addAction("Жирный")
+        italic_action = format_menu.addAction("Курсив")
+        underline_action = format_menu.addAction("Подчеркнутый")
+        highlight_action = format_menu.addAction("Выделить")
+        format_menu.addSeparator()
+        clear_format_action = format_menu.addAction("Очистить форматирование")
 
+        copy_action = custom_menu.addAction(" 📋  Копировать ")
+        copy_action.triggered.connect(self.copy)
+        
+        cut_action = custom_menu.addAction(" ✂️  Вырезать ")
+        cut_action.triggered.connect(self.cut)
+        
+        paste_action = custom_menu.addAction(" 📌  Вставить ")
+        paste_action.triggered.connect(self.paste)
+        
+        select_all_action = custom_menu.addAction(" ✅  Выделить всё ")
+        select_all_action.triggered.connect(self.selectAll)
+
+        custom_menu.addSeparator()
+        
+        delete_action = custom_menu.addAction(" ❌  Удалить ")
+        delete_action.triggered.connect(self.textCursor().removeSelectedText)
+
+        bold_action.triggered.connect(lambda: self.parent().toggle_bold())
+        italic_action.triggered.connect(lambda: self.parent().toggle_italic())
+        underline_action.triggered.connect(lambda: self.parent().toggle_underline())
+        highlight_action.triggered.connect(lambda: self.parent().toggle_highlight())
+        clear_format_action.triggered.connect(self.clear_formatting)
+
+        custom_menu.exec(self.mapToGlobal(position))
+
+    def clear_formatting(self):
+        cursor = self.textCursor()
+        format = QTextCharFormat()
+        format.setFont(self.default_font)
+        cursor.mergeCharFormat(format)
+
+    def insertFromMimeData(self, source: QMimeData):
+        cursor = self.textCursor()
+        default_format = QTextCharFormat()
+        default_format.setFont(self.default_font)
+        cursor.insertText(source.text())
+        cursor.select(QTextCursor.SelectionType.Document)
+        cursor.mergeCharFormat(default_format)
 class NotesApp(QWidget):
     NOTES_LIST_STYLE = """
         QListWidget {

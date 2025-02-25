@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import (
     QFont, QIcon, QTextCursor, QTextCharFormat, QShortcut, QKeySequence, QColor
 )
-from PyQt6.QtCore import Qt, QTimer, QMimeData
+from PyQt6.QtCore import Qt, QTimer, QMimeData, QPoint
 
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
@@ -345,9 +345,15 @@ class NotesApp(QWidget):
         layout.addWidget(self.splitter)
 
         bottom_panel = QWidget()
-        bottom_panel.setFixedHeight(20)
+        bottom_panel.setFixedHeight(22)
         bottom_layout = QHBoxLayout(bottom_panel)
-        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.setContentsMargins(1, 0, 0, 0)
+
+        self.sort_button = QPushButton("🗃")
+        self.sort_button.setFixedSize(22, 22)
+        self.sort_button.setStyleSheet(button_style + "QPushButton { margin-left: 1px; }")
+        self.sort_button.clicked.connect(self.show_sort_menu)
+        bottom_layout.addWidget(self.sort_button)
 
         bottom_layout.addStretch()
 
@@ -620,6 +626,91 @@ class NotesApp(QWidget):
             cursor.execute("SELECT COUNT(*) FROM notes")
             count = cursor.fetchone()[0]
             return count == 0
+
+    def show_sort_menu(self):
+        sort_menu = QMenu(self)
+        sort_menu.setFont(QFont("Calibri", 9))
+        
+        style = """
+            QMenu {
+                background-color: rgba(255, 255, 255, 0.95);
+                border: 0.5px solid #efe2e7;
+                border-radius: 10px;
+                padding: 5px;
+            }
+            QMenu::item {
+                color: #7f7377;
+                padding: 5px 20px 5px 10px;
+                margin: 2px 8px;
+                border-radius: 5px;
+                min-width: 280px;
+            }
+            QMenu::item:selected {
+                background-color: #ece0f2;
+                color: #7f7377;
+                border-radius: 5px;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #efe2e7;
+                margin: 3px 10px;
+            }
+        """
+        sort_menu.setStyleSheet(style)
+
+        # Добавляем пункты меню
+        new_to_old = sort_menu.addAction("От новых к старым записям")
+        old_to_new = sort_menu.addAction("От старых к новым записям")
+        
+        sort_menu.addSeparator()
+        
+        name_az = sort_menu.addAction("По имени файла (от А до Я)")
+        name_za = sort_menu.addAction("По имени файла (от Я до А)")
+        
+        sort_menu.addSeparator()
+        
+        modified_new = sort_menu.addAction("По времени последнего изменения (от новых к старым)")
+        modified_old = sort_menu.addAction("По времени последнего изменения (от старых к новым)")
+
+        # Привязываем действия
+        new_to_old.triggered.connect(lambda: self.sort_notes("date_desc"))
+        old_to_new.triggered.connect(lambda: self.sort_notes("date_asc"))
+        name_az.triggered.connect(lambda: self.sort_notes("name_asc"))
+        name_za.triggered.connect(lambda: self.sort_notes("name_desc"))
+        modified_new.triggered.connect(lambda: self.sort_notes("modified_desc"))
+        modified_old.triggered.connect(lambda: self.sort_notes("modified_asc"))
+
+        # Показываем меню возле кнопки
+        sort_menu.exec(self.sort_button.mapToGlobal(QPoint(0, -sort_menu.sizeHint().height())))
+
+    def sort_notes(self, sort_type):
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            
+            if sort_type == "date_desc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY created_at DESC")
+            elif sort_type == "date_asc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY created_at ASC")
+            elif sort_type == "name_asc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE ASC")
+            elif sort_type == "name_desc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE DESC")
+            elif sort_type == "modified_desc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY last_accessed DESC")
+            else:  # modified_asc
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY last_accessed ASC")
+            
+            self.notes_list.clear()
+            for note in cursor.fetchall():
+                title = note[1] if note[1] else "Без названия"
+                date_obj = datetime.strptime(note[2].split('.')[0], '%Y-%m-%d %H:%M:%S')
+                date = f"{date_obj.day} {MONTHS[date_obj.month]} {date_obj.year} {date_obj.hour:02d}:{date_obj.minute:02d}"
+
+                item = QListWidgetItem()
+                item.setText(f"{title}\n{date}")
+                item.setData(Qt.ItemDataRole.UserRole, note[0])
+                self.notes_list.addItem(item)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

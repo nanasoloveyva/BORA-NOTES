@@ -26,6 +26,36 @@ class CustomTextEdit(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.default_font = QFont("Calibri", 12)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.showCustomContextMenu)
+        
+        # Стили для QTextEdit и скроллбара
+        self.setStyleSheet("""
+            QTextEdit {
+                border: none;
+                background-color: transparent;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #EDE7F6;
+                width: 7px;
+                border-radius: 4px;
+                margin: 4px 4px 4px 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #B39DDB;
+                border-radius: 4px;
+                min-height: 20px;
+            }
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+            }
+            QScrollBar:horizontal {
+                height: 0;
+            }
+        """)
 
     def insertFromMimeData(self, source: QMimeData):
         cursor = self.textCursor()
@@ -34,6 +64,60 @@ class CustomTextEdit(QTextEdit):
         cursor.insertText(source.text())
         cursor.select(QTextCursor.SelectionType.Document)
         cursor.mergeCharFormat(default_format)
+
+    def createStandardContextMenu(self):
+        menu = super().createStandardContextMenu()
+        menu.setFont(QFont("Calibri", 9))
+        
+        style = """
+            QMenu {
+                background-color: #FFFFFF;
+                border: 0.5px solid #efe2e7;
+                border-radius: 10px;
+                padding: 5px;
+            }
+            QMenu::item {
+                color: #7f7377;
+                padding: 5px 20px 5px 35px;
+                margin: 2px 8px;
+                border-radius: 5px;
+                min-width: 120px;
+            }
+            QMenu::item:selected {
+                background-color: #D1C4E9;
+                color: white;
+            }
+            QMenu::item:disabled {
+                color: #bbb;
+                background-color: transparent;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #efe2e7;
+                margin: 3px 10px;
+            }
+        """
+        menu.setStyleSheet(style)
+
+        action_translations = {
+            "Cu&t": "Вырезать",
+            "&Copy": "Копировать",
+            "&Paste": "Вставить",
+            "&Delete": "Удалить",
+            "Select &All": "Выделить всё",
+            "&Undo": "Отменить",
+            "&Redo": "Повторить"
+        }
+        
+        for action in menu.actions():
+            if action.text() in action_translations:
+                action.setText(action_translations[action.text()])
+        
+        return menu
+
+    def showCustomContextMenu(self, pos):
+        menu = self.createStandardContextMenu()
+        menu.exec(self.mapToGlobal(pos))
 
 class NotesApp(QWidget):
     NOTES_LIST_STYLE = """
@@ -61,15 +145,15 @@ class NotesApp(QWidget):
             background: #EDE7F6;
             width: 7px;
             border-radius: 4px;
-            margin-right: 4px;
+            margin: 4px 4px 4px 0;
         }
         QScrollBar::handle:vertical {
             background: #B39DDB;
             border-radius: 4px;
-            margin-right: 1px;
             min-height: 20px;
         }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+        QScrollBar::add-line:vertical,
+        QScrollBar::sub-line:vertical {
             border: none;
             background: none;
         }
@@ -178,7 +262,34 @@ class NotesApp(QWidget):
         separator.setStyleSheet("background-color: #efe2e7; margin-left: 5px; margin-right: 5px; margin-bottom: 5px;")
 
         self.text_editor = CustomTextEdit()
-        self.text_editor.setStyleSheet("QTextEdit { background-color: transparent; border: none; }")
+        self.text_editor.setStyleSheet("""
+        QTextEdit { 
+            background-color: transparent; 
+            border: none; 
+        }
+        QScrollBar:vertical {
+            border: none;
+            background: #EDE7F6;
+            width: 8px;
+            border-radius: 4px;
+            margin: 4px 4px 4px 0;
+        }
+        QScrollBar::handle:vertical {
+            background: #B39DDB;
+            border-radius: 2px;
+            min-height: 20px;
+        }
+        QScrollBar::add-line:vertical,
+        QScrollBar::sub-line:vertical {
+            border: none;
+            background: none;
+            height: 0;
+        }
+        QScrollBar:horizontal {
+            height: 0;
+        }
+    """)
+        
         self.text_editor.setFont(QFont("Calibri", 12))
         self.text_editor.textChanged.connect(self.auto_save)
         self.text_editor.textChanged.connect(self.auto_format)
@@ -414,7 +525,8 @@ class NotesApp(QWidget):
     def toggle_bold(self):
         cursor = self.text_editor.textCursor()
         format = cursor.charFormat()
-        format.setFontWeight(QFont.Weight.Bold if format.fontWeight() != QFont.Weight.Bold else QFont.Weight.Normal)
+        new_weight = QFont.Weight.Normal if format.fontWeight() == QFont.Weight.Bold else QFont.Weight.Bold
+        format.setFontWeight(new_weight)
         cursor.mergeCharFormat(format)
 
     def toggle_italic(self):
@@ -432,10 +544,9 @@ class NotesApp(QWidget):
     def toggle_highlight(self):
         cursor = self.text_editor.textCursor()
         format = cursor.charFormat()
-        if format.background().color() == QColor("#e4d5ff"):
-            format.setBackground(QColor("transparent"))
-        else:
-            format.setBackground(QColor("#e4d5ff"))
+        current_color = format.background().color()
+        new_color = QColor("transparent") if current_color == QColor("#e4d5ff") else QColor("#e4d5ff")
+        format.setBackground(new_color)
         cursor.mergeCharFormat(format)
 
     def undo(self):

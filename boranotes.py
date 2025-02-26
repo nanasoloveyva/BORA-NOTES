@@ -345,12 +345,12 @@ class NotesApp(QWidget):
         layout.addWidget(self.splitter)
 
         bottom_panel = QWidget()
-        bottom_panel.setFixedHeight(22)
+        bottom_panel.setFixedHeight(23)
         bottom_layout = QHBoxLayout(bottom_panel)
         bottom_layout.setContentsMargins(1, 0, 0, 0)
 
         self.sort_button = QPushButton("🗃")
-        self.sort_button.setFixedSize(22, 22)
+        self.sort_button.setFixedSize(25, 23)
         self.sort_button.setStyleSheet(button_style + "QPushButton { margin-left: 1px; }")
         self.sort_button.clicked.connect(self.show_sort_menu)
         bottom_layout.addWidget(self.sort_button)

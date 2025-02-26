@@ -167,10 +167,12 @@ class NotesApp(QWidget):
             margin: 5px;
             background: #EDE7F6;
             border-radius: 4px;
+            border: 0.5px solid #efe2e7;
         }
         QListWidget::item:selected {
             background-color: #B39DDB;
             color: white;
+            border: 0.5px solid #aa95cf;
         }
         QScrollBar:vertical {
             border: none;

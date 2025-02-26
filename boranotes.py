@@ -4,12 +4,12 @@ import sqlite3
 from datetime import datetime
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QListWidget, QListWidgetItem,
-    QTextEdit, QHBoxLayout, QLineEdit, QLabel, QMessageBox, QCheckBox, QSplitter
+    QTextEdit, QHBoxLayout, QLineEdit, QLabel, QMessageBox, QCheckBox, QSplitter, QMenu
 )
 from PyQt6.QtGui import (
     QFont, QIcon, QTextCursor, QTextCharFormat, QShortcut, QKeySequence, QColor
 )
-from PyQt6.QtCore import Qt, QTimer, QMimeData
+from PyQt6.QtCore import Qt, QTimer, QMimeData, QPoint
 
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
@@ -26,6 +26,123 @@ class CustomTextEdit(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.default_font = QFont("Calibri", 12)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_custom_context_menu)
+        
+        self.setStyleSheet("""
+            QTextEdit {
+                border: none;
+                background-color: transparent;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #EDE7F6;
+                width: 7px;
+                border-radius: 4px;
+                margin: 4px 4px 4px 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #B39DDB;
+                border-radius: 4px;
+                min-height: 20px;
+            }
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0;
+            }
+            QScrollBar:horizontal {
+                height: 0;
+            }
+        """)
+
+    def show_custom_context_menu(self, position):
+        custom_menu = QMenu(self)
+        custom_menu.setFont(QFont("Calibri", 9))
+        
+        style = """
+            QMenu {
+                background-color: rgba(255, 255, 255, 0.95);
+                border: 0.5px solid #efe2e7;
+                border-radius: 10px;
+                padding: 5px;
+            }
+            QMenu::item {
+                color: #7f7377;
+                padding: 5px 20px 5px 10px;
+                margin: 2px 8px;
+                border-radius: 5px;
+                min-width: 180px;
+            }
+            QMenu::item:selected {
+                background-color: #ece0f2;
+                color: #7f7377;
+                border-radius: 5px;
+            }
+            QMenu::item:disabled {
+                color: #bbb;
+                background-color: transparent;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #efe2e7;
+                margin: 3px 10px;
+            }
+            QMenu::right-arrow {
+                border-radius: 10px;
+            }
+        """
+        custom_menu.setStyleSheet(style)
+
+        undo_action = custom_menu.addAction(" ↩️  Отменить ")
+        undo_action.triggered.connect(self.undo)
+        
+        redo_action = custom_menu.addAction(" ↪️  Повторить ")
+        redo_action.triggered.connect(self.redo)
+        
+        custom_menu.addSeparator()
+
+        format_menu = custom_menu.addMenu(" ✒️  Форматирование                  ▶")
+        format_menu.setStyleSheet(style)
+        
+        bold_action = format_menu.addAction("Жирный")
+        italic_action = format_menu.addAction("Курсив")
+        underline_action = format_menu.addAction("Подчеркнутый")
+        highlight_action = format_menu.addAction("Выделить")
+        format_menu.addSeparator()
+        clear_format_action = format_menu.addAction("Очистить форматирование")
+
+        copy_action = custom_menu.addAction(" 📋  Копировать ")
+        copy_action.triggered.connect(self.copy)
+        
+        cut_action = custom_menu.addAction(" ✂️  Вырезать ")
+        cut_action.triggered.connect(self.cut)
+        
+        paste_action = custom_menu.addAction(" 📌  Вставить ")
+        paste_action.triggered.connect(self.paste)
+        
+        select_all_action = custom_menu.addAction(" ✅  Выделить всё ")
+        select_all_action.triggered.connect(self.selectAll)
+
+        custom_menu.addSeparator()
+        
+        delete_action = custom_menu.addAction(" ❌  Удалить ")
+        delete_action.triggered.connect(self.textCursor().removeSelectedText)
+
+        bold_action.triggered.connect(lambda: self.parent().toggle_bold())
+        italic_action.triggered.connect(lambda: self.parent().toggle_italic())
+        underline_action.triggered.connect(lambda: self.parent().toggle_underline())
+        highlight_action.triggered.connect(lambda: self.parent().toggle_highlight())
+        clear_format_action.triggered.connect(self.clear_formatting)
+
+        custom_menu.exec(self.mapToGlobal(position))
+
+    def clear_formatting(self):
+        cursor = self.textCursor()
+        format = QTextCharFormat()
+        format.setFont(self.default_font)
+        cursor.mergeCharFormat(format)
 
     def insertFromMimeData(self, source: QMimeData):
         cursor = self.textCursor()
@@ -34,7 +151,6 @@ class CustomTextEdit(QTextEdit):
         cursor.insertText(source.text())
         cursor.select(QTextCursor.SelectionType.Document)
         cursor.mergeCharFormat(default_format)
-
 class NotesApp(QWidget):
     NOTES_LIST_STYLE = """
         QListWidget {
@@ -61,15 +177,15 @@ class NotesApp(QWidget):
             background: #EDE7F6;
             width: 7px;
             border-radius: 4px;
-            margin-right: 4px;
+            margin: 4px 4px 4px 0;
         }
         QScrollBar::handle:vertical {
             background: #B39DDB;
             border-radius: 4px;
-            margin-right: 1px;
             min-height: 20px;
         }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+        QScrollBar::add-line:vertical,
+        QScrollBar::sub-line:vertical {
             border: none;
             background: none;
         }
@@ -109,6 +225,8 @@ class NotesApp(QWidget):
 
         self.text_editor.setAcceptRichText(True)
         self.setup_shortcuts()
+        self.splitter.splitterMoved.connect(self.check_list_visibility)
+
 
     def initUI(self):
         layout = QVBoxLayout()
@@ -118,13 +236,14 @@ class NotesApp(QWidget):
 
         self.left_container = QWidget()
         self.left_container.setMinimumWidth(10)
+        self.left_container.setMaximumWidth(self.width() - 30)
         left_layout = QVBoxLayout(self.left_container)
         left_layout.setContentsMargins(0, 0, 0, 0)
 
         self.search_bar = QLineEdit()
         self.search_bar.setFixedHeight(24)
         self.search_bar.setPlaceholderText("Поиск по записям")
-        self.search_bar.setStyleSheet("background-color: #D1C4E9; padding-left: 10px; border: 0.5px solid #efe2e7; border-radius: 4px; box-shadow: 0 2px 4px rgba(248, 241, 243, 0.3);")
+        self.search_bar.setStyleSheet("background-color: #D1C4E9; padding-left: 10px; border: 0.5px solid #efe2e7; border-radius: 4px;")
         self.search_bar.textChanged.connect(self.search_notes)
         left_layout.addWidget(self.search_bar)
 
@@ -134,6 +253,7 @@ class NotesApp(QWidget):
         left_layout.addWidget(self.notes_list)
 
         self.right_container = QWidget()
+        self.right_container.setMinimumWidth(90)
         self.right_layout = QVBoxLayout(self.right_container)
         self.right_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -178,7 +298,33 @@ class NotesApp(QWidget):
         separator.setStyleSheet("background-color: #efe2e7; margin-left: 5px; margin-right: 5px; margin-bottom: 5px;")
 
         self.text_editor = CustomTextEdit()
-        self.text_editor.setStyleSheet("QTextEdit { background-color: transparent; border: none; }")
+        self.text_editor.setStyleSheet("""
+            QTextEdit { 
+                background-color: transparent; 
+                border: none; 
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #EDE7F6;
+                width: 7px;
+                border-radius: 4px;
+                margin: 4px 4px 4px 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #B39DDB;
+                border-radius: 4px;
+                min-height: 20px;
+            }
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0;
+            }
+            QScrollBar:horizontal {
+                height: 0;
+            }
+        """)
         self.text_editor.setFont(QFont("Calibri", 12))
         self.text_editor.textChanged.connect(self.auto_save)
         self.text_editor.textChanged.connect(self.auto_format)
@@ -193,13 +339,21 @@ class NotesApp(QWidget):
         self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 3)
         self.splitter.setSizes([self.initial_notes_list_width, 600])
+        self.splitter.setCollapsible(1, False)
+        self.splitter.setHandleWidth(1)
 
         layout.addWidget(self.splitter)
 
         bottom_panel = QWidget()
-        bottom_panel.setFixedHeight(20)
+        bottom_panel.setFixedHeight(23)
         bottom_layout = QHBoxLayout(bottom_panel)
-        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.setContentsMargins(1, 0, 0, 0)
+
+        self.sort_button = QPushButton("🗃")
+        self.sort_button.setFixedSize(25, 23)
+        self.sort_button.setStyleSheet(button_style + "QPushButton { margin-left: 1px; }")
+        self.sort_button.clicked.connect(self.show_sort_menu)
+        bottom_layout.addWidget(self.sort_button)
 
         bottom_layout.addStretch()
 
@@ -210,6 +364,18 @@ class NotesApp(QWidget):
         layout.addWidget(bottom_panel)
         self.setLayout(layout)
         self.text_editor.textChanged.connect(self.update_counter)
+
+    def resizeEvent(self, event):
+        self.left_container.setMaximumWidth(self.width() - 90)
+        super().resizeEvent(event)
+
+    def check_list_visibility(self, pos, index):
+        if pos <= 10:
+            self.is_notes_list_visible = False
+            self.toggle_button.setText("▶")
+        else:
+            self.is_notes_list_visible = True
+            self.toggle_button.setText("◀")
 
     def toggle_notes_list(self):
         if self.is_notes_list_visible:
@@ -414,7 +580,8 @@ class NotesApp(QWidget):
     def toggle_bold(self):
         cursor = self.text_editor.textCursor()
         format = cursor.charFormat()
-        format.setFontWeight(QFont.Weight.Bold if format.fontWeight() != QFont.Weight.Bold else QFont.Weight.Normal)
+        new_weight = QFont.Weight.Normal if format.fontWeight() == QFont.Weight.Bold else QFont.Weight.Bold
+        format.setFontWeight(new_weight)
         cursor.mergeCharFormat(format)
 
     def toggle_italic(self):
@@ -432,10 +599,9 @@ class NotesApp(QWidget):
     def toggle_highlight(self):
         cursor = self.text_editor.textCursor()
         format = cursor.charFormat()
-        if format.background().color() == QColor("#e4d5ff"):
-            format.setBackground(QColor("transparent"))
-        else:
-            format.setBackground(QColor("#e4d5ff"))
+        current_color = format.background().color()
+        new_color = QColor("transparent") if current_color == QColor("#e4d5ff") else QColor("#e4d5ff")
+        format.setBackground(new_color)
         cursor.mergeCharFormat(format)
 
     def undo(self):
@@ -460,6 +626,91 @@ class NotesApp(QWidget):
             cursor.execute("SELECT COUNT(*) FROM notes")
             count = cursor.fetchone()[0]
             return count == 0
+
+    def show_sort_menu(self):
+        sort_menu = QMenu(self)
+        sort_menu.setFont(QFont("Calibri", 9))
+        
+        style = """
+            QMenu {
+                background-color: rgba(255, 255, 255, 0.95);
+                border: 0.5px solid #efe2e7;
+                border-radius: 10px;
+                padding: 5px;
+            }
+            QMenu::item {
+                color: #7f7377;
+                padding: 5px 20px 5px 10px;
+                margin: 2px 8px;
+                border-radius: 5px;
+                min-width: 280px;
+            }
+            QMenu::item:selected {
+                background-color: #ece0f2;
+                color: #7f7377;
+                border-radius: 5px;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #efe2e7;
+                margin: 3px 10px;
+            }
+        """
+        sort_menu.setStyleSheet(style)
+
+        # Добавляем пункты меню
+        new_to_old = sort_menu.addAction("От новых к старым записям")
+        old_to_new = sort_menu.addAction("От старых к новым записям")
+        
+        sort_menu.addSeparator()
+        
+        name_az = sort_menu.addAction("По имени файла (от А до Я)")
+        name_za = sort_menu.addAction("По имени файла (от Я до А)")
+        
+        sort_menu.addSeparator()
+        
+        modified_new = sort_menu.addAction("По времени последнего изменения (от новых к старым)")
+        modified_old = sort_menu.addAction("По времени последнего изменения (от старых к новым)")
+
+        # Привязываем действия
+        new_to_old.triggered.connect(lambda: self.sort_notes("date_desc"))
+        old_to_new.triggered.connect(lambda: self.sort_notes("date_asc"))
+        name_az.triggered.connect(lambda: self.sort_notes("name_asc"))
+        name_za.triggered.connect(lambda: self.sort_notes("name_desc"))
+        modified_new.triggered.connect(lambda: self.sort_notes("modified_desc"))
+        modified_old.triggered.connect(lambda: self.sort_notes("modified_asc"))
+
+        # Показываем меню возле кнопки
+        sort_menu.exec(self.sort_button.mapToGlobal(QPoint(0, -sort_menu.sizeHint().height())))
+
+    def sort_notes(self, sort_type):
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            
+            if sort_type == "date_desc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY created_at DESC")
+            elif sort_type == "date_asc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY created_at ASC")
+            elif sort_type == "name_asc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE ASC")
+            elif sort_type == "name_desc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE DESC")
+            elif sort_type == "modified_desc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY last_accessed DESC")
+            else:  # modified_asc
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY last_accessed ASC")
+            
+            self.notes_list.clear()
+            for note in cursor.fetchall():
+                title = note[1] if note[1] else "Без названия"
+                date_obj = datetime.strptime(note[2].split('.')[0], '%Y-%m-%d %H:%M:%S')
+                date = f"{date_obj.day} {MONTHS[date_obj.month]} {date_obj.year} {date_obj.hour:02d}:{date_obj.minute:02d}"
+
+                item = QListWidgetItem()
+                item.setText(f"{title}\n{date}")
+                item.setData(Qt.ItemDataRole.UserRole, note[0])
+                self.notes_list.addItem(item)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

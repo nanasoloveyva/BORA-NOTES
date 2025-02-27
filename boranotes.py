@@ -9,7 +9,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import (
     QFont, QIcon, QTextCursor, QTextCharFormat, QShortcut, QKeySequence, QColor
 )
-from PyQt6.QtCore import Qt, QTimer, QMimeData, QPoint
+from PyQt6.QtCore import Qt, QTimer, QMimeData, QPoint, QDate
+from PyQt6.QtWidgets import QCalendarWidget, QVBoxLayout
 
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
@@ -151,6 +152,34 @@ class CustomTextEdit(QTextEdit):
         cursor.insertText(source.text())
         cursor.select(QTextCursor.SelectionType.Document)
         cursor.mergeCharFormat(default_format)
+
+
+class CustomCalendar(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        
+        # Создаем виджет календаря
+        self.calendar = QCalendarWidget()
+        
+        # Устанавливаем текущую дату
+        current_date = QDate.currentDate()
+        self.calendar.setSelectedDate(current_date)
+        
+        # Применяем нужный стиль
+        self.setStyleSheet("""
+            CustomCalendar {
+                background-color: #FFFFFF;
+                border-radius: 8px;
+                border: 0.5px solid #efe2e7;
+                box-shadow: 0 2px 4px rgba(248, 241, 243, 0.3);
+            }
+        """)
+        
+        # Убираем отображение номеров недель
+        self.calendar.setVerticalHeaderFormat(QCalendarWidget.VerticalHeaderFormat.NoVerticalHeader)
+        
+        layout.addWidget(self.calendar)
 class NotesApp(QWidget):
     NOTES_LIST_STYLE = """
         QListWidget {
@@ -229,6 +258,24 @@ class NotesApp(QWidget):
         self.setup_shortcuts()
         self.splitter.splitterMoved.connect(self.check_list_visibility)
 
+        self.calendar_widget = CustomCalendar()
+        self.right_layout.addWidget(self.calendar_widget)
+        self.calendar_widget.hide()
+
+    def show_editor(self):
+        self.calendar_widget.hide()
+        self.editor_container.show()
+        button_style = "QPushButton { background-color: #D1C4E9; border: none; border-radius: 4px; color: #7f7377; } QPushButton:hover { background-color: #B39DDB; color: #7f7377; }"
+        self.btn_editor.setStyleSheet(button_style)
+        self.btn_calendar.setStyleSheet(button_style)
+
+    def show_calendar(self):
+        self.editor_container.hide()
+        self.calendar_widget.show()
+        button_style = "QPushButton { background-color: #D1C4E9; border: none; border-radius: 4px; color: #7f7377; } QPushButton:hover { background-color: #B39DDB; color: #7f7377; }"
+        self.btn_editor.setStyleSheet(button_style)
+        self.btn_calendar.setStyleSheet(button_style)
+
 
     def initUI(self):
         layout = QVBoxLayout()
@@ -282,6 +329,26 @@ class NotesApp(QWidget):
         buttons_layout.addWidget(self.btn_delete)
         buttons_layout.addStretch()
         self.right_layout.addLayout(buttons_layout)
+
+        self.vertical_divider = QWidget()
+        self.vertical_divider.setFixedSize(1, 24)
+        self.vertical_divider.setStyleSheet("background-color: #efe2e7;")
+
+        self.btn_editor = QPushButton("📝")
+        self.btn_editor.setFixedSize(24, 24)
+        self.btn_editor.clicked.connect(self.show_editor)
+        self.btn_editor.setStyleSheet(button_style)
+
+        self.btn_calendar = QPushButton("📅")
+        self.btn_calendar.setFixedSize(24, 24)
+        self.btn_calendar.clicked.connect(self.show_calendar)
+        self.btn_calendar.setStyleSheet(button_style)
+
+        buttons_layout.addWidget(self.btn_delete)
+        buttons_layout.addWidget(self.vertical_divider)
+        buttons_layout.addWidget(self.btn_editor)
+        buttons_layout.addWidget(self.btn_calendar)
+        buttons_layout.addStretch()
 
         self.editor_container = QWidget()
         self.editor_container.setStyleSheet("background-color: #FFFFFF; border-radius: 8px; border: 0.5px solid #efe2e7; box-shadow: 0 2px 4px rgba(248, 241, 243, 0.3);")

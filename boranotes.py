@@ -137,6 +137,7 @@ class NotesApp(QWidget):
         self.text_editor.setAcceptRichText(True)
         self.setup_shortcuts()
         self.splitter.splitterMoved.connect(self.check_list_visibility)
+        self.title_input.textChanged.connect(self.update_note_title)
 
     def initUI(self):
         layout = QVBoxLayout()
@@ -215,7 +216,7 @@ class NotesApp(QWidget):
         self.splitter.setStretchFactor(1, 3)
         self.splitter.setSizes([self.initial_notes_list_width, 600])
         self.splitter.setCollapsible(1, False)
-        self.splitter.setHandleWidth(1)
+        self.splitter.setHandleWidth(3)
 
         layout.addWidget(self.splitter)
 
@@ -232,6 +233,7 @@ class NotesApp(QWidget):
         self.settings_button = QPushButton("⚙️")
         self.settings_button.setFixedSize(25, 23)
         self.settings_button.clicked.connect(self.show_settings)
+        self.settings_button.setStyleSheet("margin-left: -5px;")  # Сдвигаем влево на 2px
         bottom_layout.addWidget(self.settings_button)
 
         bottom_layout.addStretch()
@@ -245,6 +247,27 @@ class NotesApp(QWidget):
         
         # Применяем тему
         self.apply_theme(self.current_theme)
+
+    def update_note_title(self):
+        if not self.current_note_id:
+            return
+            
+        title = self.title_input.text().strip()
+        
+        # Обновляем заголовок в списке
+        for i in range(self.notes_list.count()):
+            item = self.notes_list.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == self.current_note_id:
+                # Получаем текущий текст элемента и обновляем только заголовок
+                current_text = item.text()
+                date_line = current_text.split('\n')[1] if '\n' in current_text else ""
+                new_title = title if title else "Без Названия"
+                item.setText(f"{new_title}\n{date_line}")
+                break
+        
+        if self.current_note_id in self._notes_cache:
+            self._notes_cache[self.current_note_id]['title'] = title
+    
 
     def show_notes_list_context_menu(self, position):
         theme = get_theme(self.current_theme)
@@ -414,52 +437,88 @@ class NotesApp(QWidget):
 
     def load_notes(self):
         self.notes_list.clear()
+        
+        # Получаем актуальные ID заметок из БД
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT id, title, created_at FROM notes ORDER BY id DESC")
+            current_ids = set()
+            
             for note in cursor.fetchall():
+                note_id = note[0]
+                current_ids.add(note_id)
+                
+                # Форматирование данных
                 title = note[1] if note[1] else "Без Названия"
                 date_obj = datetime.strptime(note[2].split('.')[0], '%Y-%m-%d %H:%M:%S')
                 date = f"{date_obj.day} {MONTHS[date_obj.month]} {date_obj.year} {date_obj.hour:02d}:{date_obj.minute:02d}"
 
+                # Создание элемента списка
                 item = QListWidgetItem()
                 item.setText(f"{title}\n{date}")
-                item.setData(Qt.ItemDataRole.UserRole, note[0])
+                item.setData(Qt.ItemDataRole.UserRole, note_id)
                 self.notes_list.addItem(item)
-                self._notes_cache[note[0]] = {'title': note[1], 'content': ''}
+                
+                # Обновляем кэш только для новых заметок
+                if note_id not in self._notes_cache:
+                    self._notes_cache[note_id] = {'title': note[1], 'content': None}
+
+        # Очищаем кэш от удаленных заметок
+        for cached_id in list(self._notes_cache.keys()):
+            if cached_id not in current_ids:
+                del self._notes_cache[cached_id]
         
         self.check_empty_state()
+
+    def load_note(self):
+        if hasattr(self, '_is_loading') and self._is_loading:
+            return
+            
+        self._is_loading = True
+        
+        current_item = self.notes_list.currentItem()
+        if current_item:
+            note_id = current_item.data(Qt.ItemDataRole.UserRole)
+            if note_id != self.current_note_id:
+                self.current_note_id = note_id
+                
+                # Проверяем, загружено ли содержимое в кэш
+                if note_id in self._notes_cache:
+                    cached_note = self._notes_cache[note_id]
+                    self.title_input.setText(cached_note['title'])
+                    
+                    # Если содержимое еще не загружено, загружаем его
+                    if cached_note['content'] is None:
+                        with sqlite3.connect(DB_FILE) as conn:
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE notes SET last_accessed = datetime('now', 'localtime') WHERE id = ?", (note_id,))
+                            cursor.execute("SELECT content FROM notes WHERE id = ?", (note_id,))
+                            content = cursor.fetchone()[0]
+                            self.text_editor.setHtml(content)
+                            self._notes_cache[note_id]['content'] = content
+                            conn.commit()
+                    else:
+                        self.text_editor.setHtml(cached_note['content'])
+                else:
+                    # Если заметки нет в кэше, загружаем полностью
+                    with sqlite3.connect(DB_FILE) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("UPDATE notes SET last_accessed = datetime('now', 'localtime') WHERE id = ?", (note_id,))
+                        cursor.execute("SELECT title, content FROM notes WHERE id = ?", (note_id,))
+                        note = cursor.fetchone()
+                        if note:
+                            self.title_input.setText(note[0])
+                            self.text_editor.setHtml(note[1])
+                            self._notes_cache[note_id] = {'title': note[0], 'content': note[1]}
+                        conn.commit()
+    
+        self._is_loading = False
 
     def search_notes(self):
         search_text = self.search_bar.text().strip().lower()
         for i in range(self.notes_list.count()):
             item = self.notes_list.item(i)
             item.setHidden(not any(search_text in text for text in item.text().lower().split()))
-
-    def load_note(self):
-        current_item = self.notes_list.currentItem()
-        if current_item:
-            note_id = current_item.data(Qt.ItemDataRole.UserRole)
-            if note_id != self.current_note_id:
-                self.current_note_id = note_id
-
-                if note_id in self._notes_cache:
-                    cached_note = self._notes_cache[note_id]
-                    self.title_input.setText(cached_note['title'])
-                    if cached_note['content']:
-                        self.text_editor.setHtml(cached_note['content'])
-                        return
-
-                with sqlite3.connect(DB_FILE) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("UPDATE notes SET last_accessed = datetime('now', 'localtime') WHERE id = ?", (note_id,))
-                    cursor.execute("SELECT title, content FROM notes WHERE id = ?", (note_id,))
-                    note = cursor.fetchone()
-                    if note:
-                        self.title_input.setText(note[0])
-                        self.text_editor.setHtml(note[1])
-                        self._notes_cache[note_id] = {'title': note[0], 'content': note[1]}
-                    conn.commit()
 
     def load_last_note(self):
         with sqlite3.connect(DB_FILE) as conn:

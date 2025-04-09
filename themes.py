@@ -11,7 +11,6 @@ def get_theme(theme_name):
     themes = {
         "light": {
             "main_window": "* { font-family: Calibri; } QWidget { background-color: #EDE7F6; border-radius: 8px; }",
-            
             "notes_list": """
                 QListWidget {
                     background-color: #D1C4E9;
@@ -91,7 +90,15 @@ def get_theme(theme_name):
             
             "title_input": "background-color: transparent; border: none; padding-left: 5px; color: #000000;",
             
-            "separator": "background-color: #efe2e7; margin-left: 5px; margin-right: 5px; margin-bottom: 5px;",
+            "separator": """
+                background-color: #efe2e7;
+                margin-left: 5px;
+                margin-right: 5px;
+                margin-bottom: 5px;
+                min-height: 1px;
+                max-height: 1px;
+                border: none;
+            """,
             
             "counter_label": "QLabel { color: #7f7377; font-size: 11px; margin-right: 10px; }",
             
@@ -162,7 +169,6 @@ def get_theme(theme_name):
         
         "dark": {
             "main_window": "* { font-family: Calibri; } QWidget { background-color: #1E1E1E; border-radius: 8px; }",
-            
             "notes_list": """
                 QListWidget {
                     background-color: #2D2D2D;
@@ -243,7 +249,15 @@ def get_theme(theme_name):
             
             "title_input": "background-color: transparent; border: none; padding-left: 5px; color: #FFFFFF;",
             
-            "separator": "background-color: #3C3C3C; margin-left: 5px; margin-right: 5px; margin-bottom: 5px;",
+            "separator": """
+                background-color: #5C5C5C;
+                margin-left: 5px;
+                margin-right: 5px;
+                margin-bottom: 5px;
+                min-height: 1px;
+                max-height: 1px;
+                border: none;
+            """,
             
             "counter_label": "QLabel { color: #CCCCCC; font-size: 11px; margin-right: 10px; }",
             

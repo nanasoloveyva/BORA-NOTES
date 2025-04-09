@@ -10,6 +10,8 @@ from PyQt6.QtGui import (
     QFont, QIcon, QTextCursor, QTextCharFormat, QShortcut, QKeySequence, QColor
 )
 from PyQt6.QtCore import Qt, QTimer, QMimeData, QPoint
+from PyQt6.QtWidgets import QVBoxLayout
+from themes import get_theme
 
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
@@ -28,75 +30,15 @@ class CustomTextEdit(QTextEdit):
         self.default_font = QFont("Calibri", 12)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_custom_context_menu)
-        
-        self.setStyleSheet("""
-            QTextEdit {
-                border: none;
-                background-color: transparent;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: #EDE7F6;
-                width: 7px;
-                border-radius: 4px;
-                margin: 4px 4px 4px 0;
-            }
-            QScrollBar::handle:vertical {
-                background: #B39DDB;
-                border-radius: 4px;
-                min-height: 20px;
-            }
-            QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical {
-                border: none;
-                background: none;
-                height: 0;
-            }
-            QScrollBar:horizontal {
-                height: 0;
-            }
-        """)
 
     def show_custom_context_menu(self, position):
         custom_menu = QMenu(self)
         custom_menu.setFont(QFont("Calibri", 9))
         
-        # Сохраняем ссылку на NotesApp
-        notes_app = self.window()
-        
-        style = """
-            QMenu {
-                background-color: rgba(255, 255, 255, 0.95);
-                border: 0.5px solid #efe2e7;
-                border-radius: 10px;
-                padding: 5px;
-            }
-            QMenu::item {
-                color: #7f7377;
-                padding: 5px 20px 5px 10px;
-                margin: 2px 8px;
-                border-radius: 5px;
-                min-width: 180px;
-            }
-            QMenu::item:selected {
-                background-color: #ece0f2;
-                color: #7f7377;
-                border-radius: 5px;
-            }
-            QMenu::item:disabled {
-                color: #bbb;
-                background-color: transparent;
-            }
-            QMenu::separator {
-                height: 1px;
-                background-color: #efe2e7;
-                margin: 3px 10px;
-            }
-            QMenu::right-arrow {
-                border-radius: 10px;
-            }
-        """
-        custom_menu.setStyleSheet(style)
+        # Получаем стиль меню из текущей темы приложения
+        theme_name = self.window().current_theme
+        theme = get_theme(theme_name)
+        custom_menu.setStyleSheet(theme["menu_style"])
 
         undo_action = custom_menu.addAction(" ↩️  Отменить ")
         undo_action.triggered.connect(self.undo)
@@ -107,7 +49,7 @@ class CustomTextEdit(QTextEdit):
         custom_menu.addSeparator()
 
         format_menu = custom_menu.addMenu(" ✒️  Форматирование                  ▶")
-        format_menu.setStyleSheet(style)
+        format_menu.setStyleSheet(theme["menu_style"])
         
         bold_action = format_menu.addAction("Жирный")
         italic_action = format_menu.addAction("Курсив")
@@ -133,20 +75,18 @@ class CustomTextEdit(QTextEdit):
         delete_action = custom_menu.addAction(" ❌  Удалить ")
         delete_action.triggered.connect(self.textCursor().removeSelectedText)
 
-        # Используем ссылку на главное окно для подключения действий форматирования
-        bold_action.triggered.connect(lambda: notes_app.toggle_bold())
-        italic_action.triggered.connect(lambda: notes_app.toggle_italic())
-        underline_action.triggered.connect(lambda: notes_app.toggle_underline())
-        highlight_action.triggered.connect(lambda: notes_app.toggle_highlight())
+        bold_action.triggered.connect(lambda: self.parent().toggle_bold())
+        italic_action.triggered.connect(lambda: self.parent().toggle_italic())
+        underline_action.triggered.connect(lambda: self.parent().toggle_underline())
+        highlight_action.triggered.connect(lambda: self.parent().toggle_highlight())
         clear_format_action.triggered.connect(self.clear_formatting)
 
         custom_menu.exec(self.mapToGlobal(position))
-        
+
     def clear_formatting(self):
         cursor = self.textCursor()
         format = QTextCharFormat()
         format.setFont(self.default_font)
-        format.setBackground(QColor("transparent"))
         cursor.mergeCharFormat(format)
 
     def insertFromMimeData(self, source: QMimeData):
@@ -157,54 +97,11 @@ class CustomTextEdit(QTextEdit):
         cursor.select(QTextCursor.SelectionType.Document)
         cursor.mergeCharFormat(default_format)
 class NotesApp(QWidget):
-    NOTES_LIST_STYLE = """
-        QListWidget {
-            background-color: #D1C4E9;
-            font-family: Calibri;
-            min-height: 400px;
-            border-radius: 8px;
-            padding: 5px;
-            border: 0.5px solid #efe2e7;
-            box-shadow: 0 2px 4px rgba(248, 241, 243, 0.3);
-        }
-        QListWidget::item {
-            padding: 10px;
-            margin: 5px;
-            background: #EDE7F6;
-            border-radius: 4px;
-        }
-        QListWidget::item:selected {
-            background-color: #B39DDB;
-            color: white;
-        }
-        QScrollBar:vertical {
-            border: none;
-            background: #EDE7F6;
-            width: 7px;
-            border-radius: 4px;
-            margin: 4px 4px 4px 0;
-        }
-        QScrollBar::handle:vertical {
-            background: #B39DDB;
-            border-radius: 4px;
-            min-height: 20px;
-        }
-        QScrollBar::add-line:vertical,
-        QScrollBar::sub-line:vertical {
-            border: none;
-            background: none;
-        }
-        QScrollBar:horizontal {
-            height: 0;
-        }
-    """
-
     def __init__(self):
         super().__init__()
         self.setWindowIcon(QIcon(resource_path('icon.ico')))
         self.setWindowTitle("BORA NOTES")
         self.setGeometry(100, 100, 987, 693)
-        self.setStyleSheet("* { font-family: Calibri; } QWidget { background-color: #EDE7F6; border-radius: 8px; }")
         self.setMinimumHeight(500)
 
         self.current_note_id = None
@@ -213,13 +110,22 @@ class NotesApp(QWidget):
         self.need_save = False
         self.is_notes_list_visible = True
         self.initial_notes_list_width = 200
+        self.current_theme = "light"  # По умолчанию светлая тема
 
         self._save_timer = QTimer()
         self._save_timer.setInterval(1000)
         self._save_timer.timeout.connect(self._perform_auto_save)
 
-        self.initUI()
+        # Сначала создаем базу данных
         self.create_database()
+        
+        # Затем загружаем сохраненную тему
+        self.load_theme_setting()
+        
+        # Инициализируем UI
+        self.initUI()
+        
+        # Загружаем заметки
         self.load_notes()
 
         if self.is_first_launch():
@@ -231,7 +137,6 @@ class NotesApp(QWidget):
         self.text_editor.setAcceptRichText(True)
         self.setup_shortcuts()
         self.splitter.splitterMoved.connect(self.check_list_visibility)
-
 
     def initUI(self):
         layout = QVBoxLayout()
@@ -248,14 +153,10 @@ class NotesApp(QWidget):
         self.search_bar = QLineEdit()
         self.search_bar.setFixedHeight(24)
         self.search_bar.setPlaceholderText("Поиск по записям")
-        self.search_bar.setStyleSheet("background-color: #D1C4E9; padding-left: 10px; border: 0.5px solid #efe2e7; border-radius: 4px;")
-        self.search_bar.textChanged.connect(self.search_notes)
         left_layout.addWidget(self.search_bar)
 
         self.notes_list = QListWidget()
-        self.notes_list.setStyleSheet(self.NOTES_LIST_STYLE)
         self.notes_list.itemClicked.connect(self.load_note)
-        # Добавляем обработку контекстного меню
         self.notes_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.notes_list.customContextMenuRequested.connect(self.show_notes_list_context_menu)
         left_layout.addWidget(self.notes_list)
@@ -267,21 +168,17 @@ class NotesApp(QWidget):
 
         self.toggle_button = QPushButton("◀")
         self.toggle_button.setFixedSize(24, 24)
-        self.toggle_button.setStyleSheet("QPushButton { background-color: #D1C4E9; border: none; border-radius: 4px; color: #7f7377; } QPushButton:hover { background-color: #B39DDB; color: #7f7377; }")
         self.toggle_button.clicked.connect(self.toggle_notes_list)
 
         buttons_layout = QHBoxLayout()
-        button_style = "QPushButton { background-color: #D1C4E9; border: none; border-radius: 4px; color: #7f7377; } QPushButton:hover { background-color: #B39DDB; color: #7f7377; }"
 
         self.btn_new = QPushButton("✏️")
         self.btn_new.setFixedSize(24, 24)
         self.btn_new.clicked.connect(self.new_note)
-        self.btn_new.setStyleSheet(button_style)
 
         self.btn_delete = QPushButton("🗑️")
         self.btn_delete.setFixedSize(24, 24)
         self.btn_delete.clicked.connect(self.delete_note)
-        self.btn_delete.setStyleSheet(button_style)
 
         buttons_layout.addWidget(self.toggle_button)
         buttons_layout.addWidget(self.btn_new)
@@ -290,7 +187,6 @@ class NotesApp(QWidget):
         self.right_layout.addLayout(buttons_layout)
 
         self.editor_container = QWidget()
-        self.editor_container.setStyleSheet("background-color: #FFFFFF; border-radius: 8px; border: 0.5px solid #efe2e7; box-shadow: 0 2px 4px rgba(248, 241, 243, 0.3);")
         editor_layout = QVBoxLayout(self.editor_container)
         editor_layout.setContentsMargins(10, 10, 10, 10)
         editor_layout.setSpacing(10)
@@ -298,47 +194,18 @@ class NotesApp(QWidget):
         self.title_input = QLineEdit()
         self.title_input.setFont(QFont("Calibri", 14, QFont.Weight.Bold))
         self.title_input.setPlaceholderText("Без Названия")
-        self.title_input.setStyleSheet("background-color: transparent; border: none; padding-left: 5px;")
         self.title_input.textChanged.connect(self.auto_save)
 
-        separator = QWidget()
-        separator.setFixedHeight(1)
-        separator.setStyleSheet("background-color: #efe2e7; margin-left: 5px; margin-right: 5px; margin-bottom: 5px;")
+        self.separator = QWidget()
+        self.separator.setFixedHeight(1)
 
         self.text_editor = CustomTextEdit()
-        self.text_editor.setStyleSheet("""
-            QTextEdit { 
-                background-color: transparent; 
-                border: none; 
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: #EDE7F6;
-                width: 7px;
-                border-radius: 4px;
-                margin: 4px 4px 4px 0;
-            }
-            QScrollBar::handle:vertical {
-                background: #B39DDB;
-                border-radius: 4px;
-                min-height: 20px;
-            }
-            QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical {
-                border: none;
-                background: none;
-                height: 0;
-            }
-            QScrollBar:horizontal {
-                height: 0;
-            }
-        """)
         self.text_editor.setFont(QFont("Calibri", 12))
         self.text_editor.textChanged.connect(self.auto_save)
         self.text_editor.textChanged.connect(self.auto_format)
 
         editor_layout.addWidget(self.title_input)
-        editor_layout.addWidget(separator)
+        editor_layout.addWidget(self.separator)
         editor_layout.addWidget(self.text_editor)
         self.right_layout.addWidget(self.editor_container)
 
@@ -359,19 +226,142 @@ class NotesApp(QWidget):
 
         self.sort_button = QPushButton("🗃")
         self.sort_button.setFixedSize(25, 23)
-        self.sort_button.setStyleSheet(button_style + "QPushButton { margin-left: 1px; }")
         self.sort_button.clicked.connect(self.show_sort_menu)
         bottom_layout.addWidget(self.sort_button)
+
+        self.settings_button = QPushButton("⚙️")
+        self.settings_button.setFixedSize(25, 23)
+        self.settings_button.clicked.connect(self.show_settings)
+        bottom_layout.addWidget(self.settings_button)
 
         bottom_layout.addStretch()
 
         self.counter_label = QLabel()
-        self.counter_label.setStyleSheet("QLabel { color: #7f7377; font-size: 11px; margin-right: 10px; }")
         bottom_layout.addWidget(self.counter_label)
 
         layout.addWidget(bottom_panel)
         self.setLayout(layout)
         self.text_editor.textChanged.connect(self.update_counter)
+        
+        # Применяем тему
+        self.apply_theme(self.current_theme)
+
+    def show_notes_list_context_menu(self, position):
+        theme = get_theme(self.current_theme)
+        context_menu = QMenu(self)
+        context_menu.setStyleSheet(theme["menu_style"])
+        
+        # Получаем элемент под курсором
+        item = self.notes_list.itemAt(position)
+        
+        if item:
+            # Если курсор над элементом списка
+            delete_action = context_menu.addAction(" ❌ Удалить запись ")
+            delete_action.triggered.connect(self.delete_note)
+        else:
+            # Если курсор над пустой областью
+            new_action = context_menu.addAction(" ✏️ Создать запись ")
+            new_action.triggered.connect(self.new_note)
+        
+        context_menu.exec(self.notes_list.mapToGlobal(position))
+
+    def apply_theme(self, theme_name):
+        """Применяет выбранную тему к интерфейсу"""
+        self.current_theme = theme_name
+        theme = get_theme(theme_name)
+        
+        # Применяем стили из темы
+        self.setStyleSheet(theme["main_window"])
+        self.notes_list.setStyleSheet(theme["notes_list"])
+        self.search_bar.setStyleSheet(theme["search_bar"])
+        self.editor_container.setStyleSheet(theme["editor_container"])
+        self.text_editor.setStyleSheet(theme["text_editor"])
+        self.title_input.setStyleSheet(theme["title_input"])
+        self.separator.setStyleSheet(theme["separator"])
+        self.counter_label.setStyleSheet(theme["counter_label"])
+        
+        # Обновляем стиль для пустого состояния, если оно существует
+        if hasattr(self, 'empty_state_label') and self.empty_state_label:
+            self.empty_state_label.setStyleSheet(theme["empty_state_label"])
+        
+        # Кнопки
+        self.toggle_button.setStyleSheet(theme["button_style"])
+        self.btn_new.setStyleSheet(theme["button_style"])
+        self.btn_delete.setStyleSheet(theme["button_style"])
+        self.sort_button.setStyleSheet(theme["sort_button"])
+        self.settings_button.setStyleSheet(theme["settings_button"])
+    
+
+        self.save_theme_setting(theme_name)
+
+    def load_theme_setting(self):
+        """Загружает сохраненную тему из базы данных"""
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                # Проверяем, существует ли таблица settings
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
+                if cursor.fetchone() is None:
+                    # Если таблицы нет, создаем ее
+                    cursor.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+                    conn.commit()
+                    return
+                    
+                cursor.execute("SELECT value FROM settings WHERE key = 'theme'")
+                result = cursor.fetchone()
+                if result:
+                    self.current_theme = result[0]
+                    print(f"Загружена тема: {self.current_theme}")
+        except sqlite3.Error as e:
+            print(f"Ошибка при загрузке темы: {e}")
+            # Если произошла ошибка, используем тему по умолчанию
+            self.current_theme = "light"
+
+    def save_theme_setting(self, theme_name):
+        """Сохраняет выбранную тему в базу данных"""
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                # Проверяем, существует ли таблица settings
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
+                if cursor.fetchone() is None:
+                    # Если таблицы нет, создаем ее
+                    cursor.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+                
+                cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", 
+                            ("theme", theme_name))
+                conn.commit()
+                print(f"Сохранена тема: {theme_name}")
+        except sqlite3.Error as e:
+            print(f"Ошибка при сохранении темы: {e}")
+
+    def show_settings(self):
+        """Показывает меню настроек"""
+        settings_menu = QMenu(self)
+        settings_menu.setFont(QFont("Calibri", 9))
+        
+        theme = get_theme(self.current_theme)
+        settings_menu.setStyleSheet(theme["menu_style"])
+        
+        # Добавляем пункты меню для выбора темы
+        theme_menu = settings_menu.addMenu("Тема оформления")
+        theme_menu.setStyleSheet(theme["menu_style"])
+        
+        light_theme = theme_menu.addAction("🌞 Светлая тема")
+        dark_theme = theme_menu.addAction("🌛 Темная тема")
+        
+        # Отмечаем текущую тему
+        if self.current_theme == "light":
+            light_theme.setIcon(QIcon(resource_path('check.png')))
+        else:
+            dark_theme.setIcon(QIcon(resource_path('check.png')))
+        
+        # Привязываем действия
+        light_theme.triggered.connect(lambda: self.apply_theme("light"))
+        dark_theme.triggered.connect(lambda: self.apply_theme("dark"))
+        
+        # Показываем меню возле кнопки настроек
+        settings_menu.exec(self.settings_button.mapToGlobal(QPoint(0, -settings_menu.sizeHint().height())))
 
     def resizeEvent(self, event):
         self.left_container.setMaximumWidth(self.width() - 90)
@@ -419,6 +409,7 @@ class NotesApp(QWidget):
             cursor = conn.cursor()
             cursor.execute("CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, created_at TEXT, last_accessed TEXT)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_last_accessed ON notes(last_accessed)")
+            cursor.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
             conn.commit()
 
     def load_notes(self):
@@ -436,6 +427,8 @@ class NotesApp(QWidget):
                 item.setData(Qt.ItemDataRole.UserRole, note[0])
                 self.notes_list.addItem(item)
                 self._notes_cache[note[0]] = {'title': note[1], 'content': ''}
+        
+        self.check_empty_state()
 
     def search_notes(self):
         search_text = self.search_bar.text().strip().lower()
@@ -492,18 +485,19 @@ class NotesApp(QWidget):
 
     def show_empty_state(self):
         self.editor_container.hide()
-        if not hasattr(self, 'empty_state_label'):
+        if not hasattr(self, 'empty_state_label') or not self.empty_state_label:
             self.empty_state_label = QLabel("Записей пока нет!\nСоздайте новую запись, нажав на кнопку ✏️", self)
-            self.empty_state_label.setStyleSheet("QLabel { background-color: #D1C4E9; border-radius: 8px; padding: 20px; font-size: 14px; color: #7f7377; border: 0.5px solid #efe2e7; }")
             self.empty_state_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.right_layout.addWidget(self.empty_state_label)
+        
+        # Применяем текущую тему к метке
+        theme = get_theme(self.current_theme)
+        self.empty_state_label.setStyleSheet(theme["empty_state_label"])
         self.empty_state_label.show()
 
     def check_empty_state(self):
         if self.notes_list.count() == 0:
             self.show_empty_state()
-            # Сбрасываем текущий ID записи
-            self.current_note_id = None
         else:
             if hasattr(self, 'empty_state_label'):
                 self.empty_state_label.hide()
@@ -531,7 +525,10 @@ class NotesApp(QWidget):
                 msg.setText("Уверены, что хотите удалить эту заметку?")
                 checkbox = QCheckBox("Больше никогда не спрашивать")
                 msg.setCheckBox(checkbox)
-                msg.setStyleSheet("QMessageBox { background-color: #EDE7F6; } QPushButton { width: 120px; height: 30px; border-radius: 4px; background-color: #EDE7F6; border: 0.5px solid #efe2e7; padding: 5px 15px; } QPushButton:hover { background-color: #D1C4E9; } QCheckBox { background-color: #EDE7F6; }")
+                
+                theme = get_theme(self.current_theme)
+                msg.setStyleSheet(theme["message_box"])
+                
                 delete_button = QPushButton("Да")
                 cancel_button = QPushButton("Нет")
                 msg.addButton(delete_button, QMessageBox.ButtonRole.YesRole)
@@ -559,22 +556,17 @@ class NotesApp(QWidget):
                 self.text_editor.clear()
                 self.load_notes()
 
-                # Проверяем, остались ли записи
-                if self.notes_list.count() > 0:
-                    new_row = min(current_row, self.notes_list.count() - 1)
-                    if new_row >= 0:
-                        self.notes_list.setCurrentRow(new_row)
-                        item = self.notes_list.item(new_row)
-                        if item:
-                            self.load_note()
-                
-                # В любом случае проверяем пустое состояние
+                new_row = min(current_row, self.notes_list.count() - 1)
+                if new_row >= 0:
+                    self.notes_list.setCurrentRow(new_row)
+                    item = self.notes_list.item(new_row)
+                    if item:
+                        self.load_note()
+
                 self.check_empty_state()
 
             except sqlite3.Error as e:
                 QMessageBox.warning(self, "Ошибка", f"Не удалось удалить заметку: {str(e)}")
-            except Exception as e:
-                QMessageBox.warning(self, "Ошибка", f"Произошла неизвестная ошибка: {str(e)}")
 
     def setup_shortcuts(self):
         bold_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
@@ -614,22 +606,10 @@ class NotesApp(QWidget):
     def toggle_highlight(self):
         cursor = self.text_editor.textCursor()
         format = cursor.charFormat()
-        
-        # Проверяем, есть ли у нас атрибут для отслеживания состояния выделения
-        if not hasattr(self, '_text_highlighted'):
-            self._text_highlighted = False
-        
-        # Переключаем состояние
-        self._text_highlighted = not self._text_highlighted
-        
-        # Применяем соответствующий цвет фона
-        if self._text_highlighted:
-            format.setBackground(QColor("#e4d5ff"))
-        else:
-            format.setBackground(QColor("transparent"))
-        
+        current_color = format.background().color()
+        new_color = QColor("transparent") if current_color == QColor("#e4d5ff") else QColor("#e4d5ff")
+        format.setBackground(new_color)
         cursor.mergeCharFormat(format)
-        
 
     def undo(self):
         self.text_editor.undo()
@@ -658,32 +638,8 @@ class NotesApp(QWidget):
         sort_menu = QMenu(self)
         sort_menu.setFont(QFont("Calibri", 9))
         
-        style = """
-            QMenu {
-                background-color: rgba(255, 255, 255, 0.95);
-                border: 0.5px solid #efe2e7;
-                border-radius: 10px;
-                padding: 5px;
-            }
-            QMenu::item {
-                color: #7f7377;
-                padding: 5px 20px 5px 10px;
-                margin: 2px 8px;
-                border-radius: 5px;
-                min-width: 280px;
-            }
-            QMenu::item:selected {
-                background-color: #ece0f2;
-                color: #7f7377;
-                border-radius: 5px;
-            }
-            QMenu::separator {
-                height: 1px;
-                background-color: #efe2e7;
-                margin: 3px 10px;
-            }
-        """
-        sort_menu.setStyleSheet(style)
+        theme = get_theme(self.current_theme)
+        sort_menu.setStyleSheet(theme["sort_menu_style"])
 
         # Добавляем пункты меню
         new_to_old = sort_menu.addAction("От новых к старым записям")
@@ -737,71 +693,6 @@ class NotesApp(QWidget):
                 item.setText(f"{title}\n{date}")
                 item.setData(Qt.ItemDataRole.UserRole, note[0])
                 self.notes_list.addItem(item)
-
-    def show_notes_list_context_menu(self, position):
-        context_menu = QMenu(self)
-        context_menu.setFont(QFont("Calibri", 9))
-        
-        style = """
-            QMenu {
-                background-color: rgba(255, 255, 255, 0.95);
-                border: 0.5px solid #efe2e7;
-                border-radius: 10px;
-                padding: 5px;
-            }
-            QMenu::item {
-                color: #7f7377;
-                padding: 5px 20px 5px 10px;
-                margin: 2px 8px;
-                border-radius: 5px;
-                min-width: 150px;
-            }
-            QMenu::item:selected {
-                background-color: #ece0f2;
-                color: #7f7377;
-                border-radius: 5px;
-            }
-        """
-        context_menu.setStyleSheet(style)
-        
-        # Получаем элемент под курсором
-        item = self.notes_list.itemAt(position)
-        
-        if item:
-            # Если клик был по элементу списка, показываем опцию удаления
-            delete_action = context_menu.addAction(" ❌  Удалить запись ")
-            delete_action.triggered.connect(lambda: self.delete_note_from_context_menu(item))
-        else:
-            # Если клик был по пустому месту, показываем опцию создания
-            new_action = context_menu.addAction(" ✏️  Создать запись ")
-            new_action.triggered.connect(self.new_note)
-        
-        context_menu.exec(self.notes_list.mapToGlobal(position))
-
-    def delete_note_from_context_menu(self, item):
-        # Получаем ID записи из данных элемента
-        note_id = item.data(Qt.ItemDataRole.UserRole)
-        
-        # Устанавливаем текущий ID записи
-        self.current_note_id = note_id
-        
-        try:
-            # Вызываем существующий метод удаления
-            self.delete_note()
-            
-            # Проверяем, остались ли записи
-            if self.notes_list.count() == 0:
-                # Если записей не осталось, показываем пустое состояние
-                self.check_empty_state()
-                # Сбрасываем текущий ID записи
-                self.current_note_id = None
-                # Очищаем редактор
-                self.title_input.clear()
-                self.text_editor.clear()
-        except Exception as e:
-            # Обрабатываем возможные ошибки
-            print(f"Ошибка при удалении записи: {e}")
-            QMessageBox.warning(self, "Ошибка", f"Не удалось удалить заметку: {str(e)}")
 
 
 if __name__ == "__main__":

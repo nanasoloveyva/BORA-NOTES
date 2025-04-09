@@ -35,7 +35,6 @@ class CustomTextEdit(QTextEdit):
         custom_menu = QMenu(self)
         custom_menu.setFont(QFont("Calibri", 9))
         
-        # Получаем стиль меню из текущей темы приложения
         theme_name = self.window().current_theme
         theme = get_theme(theme_name)
         custom_menu.setStyleSheet(theme["menu_style"])
@@ -48,13 +47,14 @@ class CustomTextEdit(QTextEdit):
         
         custom_menu.addSeparator()
 
-        format_menu = custom_menu.addMenu(" ✒️  Форматирование                  ▶")
+        format_menu = custom_menu.addMenu(" ✒️  Форматирование                ")
         format_menu.setStyleSheet(theme["menu_style"])
         
-        bold_action = format_menu.addAction("Жирный")
-        italic_action = format_menu.addAction("Курсив")
-        underline_action = format_menu.addAction("Подчеркнутый")
-        highlight_action = format_menu.addAction("Выделить")
+        bold_action = format_menu.addAction("Ctrl + B  | Жирный  ")
+        italic_action = format_menu.addAction("Ctrl + I  | Курсив  ")
+        underline_action = format_menu.addAction("Ctrl + U  | Подчеркнутый  ")
+        strikethrough_action = format_menu.addAction("Ctrl + T  | Зачеркнутый  ")  # Добавляем новый пункт
+        highlight_action = format_menu.addAction("Ctrl + H  | Выделить ")
         format_menu.addSeparator()
         clear_format_action = format_menu.addAction("Очистить форматирование")
 
@@ -78,6 +78,7 @@ class CustomTextEdit(QTextEdit):
         bold_action.triggered.connect(lambda: self.parent().toggle_bold())
         italic_action.triggered.connect(lambda: self.parent().toggle_italic())
         underline_action.triggered.connect(lambda: self.parent().toggle_underline())
+        strikethrough_action.triggered.connect(lambda: self.parent().toggle_strikethrough()) 
         highlight_action.triggered.connect(lambda: self.parent().toggle_highlight())
         clear_format_action.triggered.connect(self.clear_formatting)
 
@@ -116,16 +117,12 @@ class NotesApp(QWidget):
         self._save_timer.setInterval(1000)
         self._save_timer.timeout.connect(self._perform_auto_save)
 
-        # Сначала создаем базу данных
         self.create_database()
         
-        # Затем загружаем сохраненную тему
         self.load_theme_setting()
         
-        # Инициализируем UI
         self.initUI()
         
-        # Загружаем заметки
         self.load_notes()
 
         if self.is_first_launch():
@@ -643,11 +640,22 @@ class NotesApp(QWidget):
         undo_shortcut = QShortcut(QKeySequence("Ctrl+Z"), self)
         undo_shortcut.activated.connect(self.undo)
 
+        strikethrough_shortcut = QShortcut(QKeySequence("Ctrl+T"), self)  
+        strikethrough_shortcut.activated.connect(self.toggle_strikethrough)
+
+    
+
     def toggle_bold(self):
         cursor = self.text_editor.textCursor()
         format = cursor.charFormat()
         new_weight = QFont.Weight.Normal if format.fontWeight() == QFont.Weight.Bold else QFont.Weight.Bold
         format.setFontWeight(new_weight)
+        cursor.mergeCharFormat(format)
+
+    def toggle_strikethrough(self):
+        cursor = self.text_editor.textCursor()
+        format = cursor.charFormat()
+        format.setFontStrikeOut(not format.fontStrikeOut())
         cursor.mergeCharFormat(format)
 
     def toggle_italic(self):

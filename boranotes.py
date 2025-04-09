@@ -141,7 +141,7 @@ class CustomTextEdit(QTextEdit):
         clear_format_action.triggered.connect(self.clear_formatting)
 
         custom_menu.exec(self.mapToGlobal(position))
-
+        
     def clear_formatting(self):
         cursor = self.textCursor()
         format = QTextCharFormat()
@@ -255,6 +255,9 @@ class NotesApp(QWidget):
         self.notes_list = QListWidget()
         self.notes_list.setStyleSheet(self.NOTES_LIST_STYLE)
         self.notes_list.itemClicked.connect(self.load_note)
+        # Добавляем обработку контекстного меню
+        self.notes_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.notes_list.customContextMenuRequested.connect(self.show_notes_list_context_menu)
         left_layout.addWidget(self.notes_list)
 
         self.right_container = QWidget()
@@ -499,6 +502,8 @@ class NotesApp(QWidget):
     def check_empty_state(self):
         if self.notes_list.count() == 0:
             self.show_empty_state()
+            # Сбрасываем текущий ID записи
+            self.current_note_id = None
         else:
             if hasattr(self, 'empty_state_label'):
                 self.empty_state_label.hide()
@@ -554,17 +559,22 @@ class NotesApp(QWidget):
                 self.text_editor.clear()
                 self.load_notes()
 
-                new_row = min(current_row, self.notes_list.count() - 1)
-                if new_row >= 0:
-                    self.notes_list.setCurrentRow(new_row)
-                    item = self.notes_list.item(new_row)
-                    if item:
-                        self.load_note()
-
+                # Проверяем, остались ли записи
+                if self.notes_list.count() > 0:
+                    new_row = min(current_row, self.notes_list.count() - 1)
+                    if new_row >= 0:
+                        self.notes_list.setCurrentRow(new_row)
+                        item = self.notes_list.item(new_row)
+                        if item:
+                            self.load_note()
+                
+                # В любом случае проверяем пустое состояние
                 self.check_empty_state()
 
             except sqlite3.Error as e:
                 QMessageBox.warning(self, "Ошибка", f"Не удалось удалить заметку: {str(e)}")
+            except Exception as e:
+                QMessageBox.warning(self, "Ошибка", f"Произошла неизвестная ошибка: {str(e)}")
 
     def setup_shortcuts(self):
         bold_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
@@ -727,6 +737,71 @@ class NotesApp(QWidget):
                 item.setText(f"{title}\n{date}")
                 item.setData(Qt.ItemDataRole.UserRole, note[0])
                 self.notes_list.addItem(item)
+
+    def show_notes_list_context_menu(self, position):
+        context_menu = QMenu(self)
+        context_menu.setFont(QFont("Calibri", 9))
+        
+        style = """
+            QMenu {
+                background-color: rgba(255, 255, 255, 0.95);
+                border: 0.5px solid #efe2e7;
+                border-radius: 10px;
+                padding: 5px;
+            }
+            QMenu::item {
+                color: #7f7377;
+                padding: 5px 20px 5px 10px;
+                margin: 2px 8px;
+                border-radius: 5px;
+                min-width: 150px;
+            }
+            QMenu::item:selected {
+                background-color: #ece0f2;
+                color: #7f7377;
+                border-radius: 5px;
+            }
+        """
+        context_menu.setStyleSheet(style)
+        
+        # Получаем элемент под курсором
+        item = self.notes_list.itemAt(position)
+        
+        if item:
+            # Если клик был по элементу списка, показываем опцию удаления
+            delete_action = context_menu.addAction(" ❌  Удалить запись ")
+            delete_action.triggered.connect(lambda: self.delete_note_from_context_menu(item))
+        else:
+            # Если клик был по пустому месту, показываем опцию создания
+            new_action = context_menu.addAction(" ✏️  Создать запись ")
+            new_action.triggered.connect(self.new_note)
+        
+        context_menu.exec(self.notes_list.mapToGlobal(position))
+
+    def delete_note_from_context_menu(self, item):
+        # Получаем ID записи из данных элемента
+        note_id = item.data(Qt.ItemDataRole.UserRole)
+        
+        # Устанавливаем текущий ID записи
+        self.current_note_id = note_id
+        
+        try:
+            # Вызываем существующий метод удаления
+            self.delete_note()
+            
+            # Проверяем, остались ли записи
+            if self.notes_list.count() == 0:
+                # Если записей не осталось, показываем пустое состояние
+                self.check_empty_state()
+                # Сбрасываем текущий ID записи
+                self.current_note_id = None
+                # Очищаем редактор
+                self.title_input.clear()
+                self.text_editor.clear()
+        except Exception as e:
+            # Обрабатываем возможные ошибки
+            print(f"Ошибка при удалении записи: {e}")
+            QMessageBox.warning(self, "Ошибка", f"Не удалось удалить заметку: {str(e)}")
 
 
 if __name__ == "__main__":

@@ -61,6 +61,9 @@ class CustomTextEdit(QTextEdit):
         custom_menu = QMenu(self)
         custom_menu.setFont(QFont("Calibri", 9))
         
+        # Сохраняем ссылку на NotesApp
+        notes_app = self.window()
+        
         style = """
             QMenu {
                 background-color: rgba(255, 255, 255, 0.95);
@@ -130,10 +133,11 @@ class CustomTextEdit(QTextEdit):
         delete_action = custom_menu.addAction(" ❌  Удалить ")
         delete_action.triggered.connect(self.textCursor().removeSelectedText)
 
-        bold_action.triggered.connect(lambda: self.parent().toggle_bold())
-        italic_action.triggered.connect(lambda: self.parent().toggle_italic())
-        underline_action.triggered.connect(lambda: self.parent().toggle_underline())
-        highlight_action.triggered.connect(lambda: self.parent().toggle_highlight())
+        # Используем ссылку на главное окно для подключения действий форматирования
+        bold_action.triggered.connect(lambda: notes_app.toggle_bold())
+        italic_action.triggered.connect(lambda: notes_app.toggle_italic())
+        underline_action.triggered.connect(lambda: notes_app.toggle_underline())
+        highlight_action.triggered.connect(lambda: notes_app.toggle_highlight())
         clear_format_action.triggered.connect(self.clear_formatting)
 
         custom_menu.exec(self.mapToGlobal(position))
@@ -142,6 +146,7 @@ class CustomTextEdit(QTextEdit):
         cursor = self.textCursor()
         format = QTextCharFormat()
         format.setFont(self.default_font)
+        format.setBackground(QColor("transparent"))
         cursor.mergeCharFormat(format)
 
     def insertFromMimeData(self, source: QMimeData):
@@ -599,10 +604,22 @@ class NotesApp(QWidget):
     def toggle_highlight(self):
         cursor = self.text_editor.textCursor()
         format = cursor.charFormat()
-        current_color = format.background().color()
-        new_color = QColor("transparent") if current_color == QColor("#e4d5ff") else QColor("#e4d5ff")
-        format.setBackground(new_color)
+        
+        # Проверяем, есть ли у нас атрибут для отслеживания состояния выделения
+        if not hasattr(self, '_text_highlighted'):
+            self._text_highlighted = False
+        
+        # Переключаем состояние
+        self._text_highlighted = not self._text_highlighted
+        
+        # Применяем соответствующий цвет фона
+        if self._text_highlighted:
+            format.setBackground(QColor("#e4d5ff"))
+        else:
+            format.setBackground(QColor("transparent"))
+        
         cursor.mergeCharFormat(format)
+        
 
     def undo(self):
         self.text_editor.undo()

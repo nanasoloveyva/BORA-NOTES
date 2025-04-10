@@ -2,18 +2,20 @@ import sys
 import os
 import sqlite3
 from datetime import datetime
+
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QListWidget, QListWidgetItem,
     QTextEdit, QHBoxLayout, QLineEdit, QLabel, QMessageBox, QCheckBox, QSplitter, QMenu
 )
 from PyQt6.QtGui import (
-    QFont, QIcon, QTextCursor, QTextCharFormat, QShortcut, QKeySequence, QColor
+    QFont, QIcon, QTextCursor, QTextCharFormat, QShortcut, QKeySequence, QColor,
+    QDesktopServices, QTextFrameFormat, QTextBlockFormat
 )
 from PyQt6.QtCore import Qt, QTimer, QMimeData, QPoint, QUrl
-from PyQt6.QtWidgets import QVBoxLayout
+
 from themes import get_theme
-from PyQt6.QtGui import QDesktopServices
 from about import get_about_content, get_about_title
+
 
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
@@ -55,7 +57,7 @@ class CustomTextEdit(QTextEdit):
         bold_action = format_menu.addAction("Ctrl + B  | Жирный  ")
         italic_action = format_menu.addAction("Ctrl + I  | Курсив  ")
         underline_action = format_menu.addAction("Ctrl + U  | Подчеркнутый  ")
-        strikethrough_action = format_menu.addAction("Ctrl + T  | Зачеркнутый  ")  # Добавляем новый пункт
+        strikethrough_action = format_menu.addAction("Ctrl + T  | Зачеркнутый  ")  
         highlight_action = format_menu.addAction("Ctrl + H  | Выделить ")
         format_menu.addSeparator()
         clear_format_action = format_menu.addAction("Очистить форматирование")
@@ -67,7 +69,6 @@ class CustomTextEdit(QTextEdit):
         highlight_action.setEnabled(has_selected_text)
         clear_format_action.setEnabled(has_selected_text)
         
-        # Добавляем меню специальных символов
         special_symbols_menu = custom_menu.addMenu(" 🔣  Специальные символы                ")
         special_symbols_menu.setStyleSheet(theme["menu_style"])
         
@@ -79,7 +80,6 @@ class CustomTextEdit(QTextEdit):
         music_note_action = special_symbols_menu.addAction("♫ Музыкальная нота")
         heart_note_action = special_symbols_menu.addAction("♥︎ Заполененное сердечко")
         
-        # Добавляем меню специальных эмоджи
         special_emoji_menu = custom_menu.addMenu(" 😊  Специальные эмоджи                ")
         special_emoji_menu.setStyleSheet(theme["menu_style"])
         
@@ -95,8 +95,6 @@ class CustomTextEdit(QTextEdit):
         done_action = special_emoji_menu.addAction("✅ Сделано!")
         cross_action = special_emoji_menu.addAction("❌ Крестик")
         merch_action = special_emoji_menu.addAction("💸 На мерч бтс")
-
-        custom_menu.addSeparator()
 
         copy_action = custom_menu.addAction(" 📋  Копировать ")
         copy_action.triggered.connect(self.copy)
@@ -115,7 +113,6 @@ class CustomTextEdit(QTextEdit):
 
         custom_menu.addSeparator()
 
-        # Безопасно подключаем действия форматирования
         bold_action.triggered.connect(lambda: self.apply_formatting('bold'))
         italic_action.triggered.connect(lambda: self.apply_formatting('italic'))
         underline_action.triggered.connect(lambda: self.apply_formatting('underline'))
@@ -147,11 +144,11 @@ class CustomTextEdit(QTextEdit):
 
 
         custom_menu.exec(self.mapToGlobal(position))
-
+    
     def apply_formatting(self, format_type):
         cursor = self.textCursor()
         if not cursor.hasSelection():
-            return  # Если текст не выделен, ничего не делаем
+            return 
         
         format = QTextCharFormat()
         current_format = cursor.charFormat()
@@ -212,7 +209,7 @@ class NotesApp(QWidget):
         self.need_save = False
         self.is_notes_list_visible = True
         self.initial_notes_list_width = 200
-        self.current_theme = "light"  # По умолчанию светлая тема
+        self.current_theme = "light"  
 
         self._save_timer = QTimer()
         self._save_timer.setInterval(1000)
@@ -334,13 +331,13 @@ class NotesApp(QWidget):
         self.settings_button = QPushButton("⚙️")
         self.settings_button.setFixedSize(25, 23)
         self.settings_button.clicked.connect(self.show_settings)
-        self.settings_button.setStyleSheet("margin-left: -5px;")  # Сдвигаем влево на 2px
+        self.settings_button.setStyleSheet("margin-left: -5px;")  
         bottom_layout.addWidget(self.settings_button)
 
         self.spotify_button = QPushButton("💜")
         self.spotify_button.setFixedSize(25, 23)
         self.spotify_button.clicked.connect(self.open_spotify)
-        self.spotify_button.setStyleSheet("margin-left: -5px;")  # Такой же отступ как у кнопки настроек
+        self.spotify_button.setStyleSheet("margin-left: -5px;")  
         bottom_layout.addWidget(self.spotify_button)
 
         bottom_layout.addStretch()
@@ -442,11 +439,9 @@ class NotesApp(QWidget):
             
         title = self.title_input.text().strip()
         
-        # Обновляем заголовок в списке
         for i in range(self.notes_list.count()):
             item = self.notes_list.item(i)
             if item.data(Qt.ItemDataRole.UserRole) == self.current_note_id:
-                # Получаем текущий текст элемента и обновляем только заголовок
                 current_text = item.text()
                 date_line = current_text.split('\n')[1] if '\n' in current_text else ""
                 new_title = title if title else "Без Названия"
@@ -462,26 +457,21 @@ class NotesApp(QWidget):
         context_menu = QMenu(self)
         context_menu.setStyleSheet(theme["menu_style"])
         
-        # Получаем элемент под курсором
         item = self.notes_list.itemAt(position)
         
         if item:
-            # Если курсор над элементом списка
             delete_action = context_menu.addAction(" ❌ Удалить запись ")
             delete_action.triggered.connect(self.delete_note)
         else:
-            # Если курсор над пустой областью
             new_action = context_menu.addAction(" ✏️ Создать запись ")
             new_action.triggered.connect(self.new_note)
         
         context_menu.exec(self.notes_list.mapToGlobal(position))
 
     def apply_theme(self, theme_name):
-        """Применяет выбранную тему к интерфейсу"""
         self.current_theme = theme_name
         theme = get_theme(theme_name)
         
-        # Применяем стили из темы
         self.setStyleSheet(theme["main_window"])
         self.notes_list.setStyleSheet(theme["notes_list"])
         self.search_bar.setStyleSheet(theme["search_bar"])
@@ -491,11 +481,9 @@ class NotesApp(QWidget):
         self.separator.setStyleSheet(theme["separator"])
         self.counter_label.setStyleSheet(theme["counter_label"])
         
-        # Обновляем стиль для пустого состояния, если оно существует
         if hasattr(self, 'empty_state_label') and self.empty_state_label:
             self.empty_state_label.setStyleSheet(theme["empty_state_label"])
         
-        # Кнопки
         self.toggle_button.setStyleSheet(theme["button_style"])
         self.btn_new.setStyleSheet(theme["button_style"])
         self.btn_delete.setStyleSheet(theme["button_style"])
@@ -543,10 +531,8 @@ class NotesApp(QWidget):
         try:
             with sqlite3.connect(DB_FILE) as conn:
                 cursor = conn.cursor()
-                # Проверяем, существует ли таблица settings
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
                 if cursor.fetchone() is None:
-                    # Если таблицы нет, создаем ее
                     cursor.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
                     conn.commit()
                     return
@@ -558,7 +544,6 @@ class NotesApp(QWidget):
                     print(f"Загружена тема: {self.current_theme}")
         except sqlite3.Error as e:
             print(f"Ошибка при загрузке темы: {e}")
-            # Если произошла ошибка, используем тему по умолчанию
             self.current_theme = "light"
 
     def save_theme_setting(self, theme_name):
@@ -566,10 +551,8 @@ class NotesApp(QWidget):
         try:
             with sqlite3.connect(DB_FILE) as conn:
                 cursor = conn.cursor()
-                # Проверяем, существует ли таблица settings
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
                 if cursor.fetchone() is None:
-                    # Если таблицы нет, создаем ее
                     cursor.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
                 
                 cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", 
@@ -607,22 +590,19 @@ class NotesApp(QWidget):
         """Создает или переходит к заметке 'О программе'"""
         about_title = get_about_title()
         about_content = get_about_content()
-        
-        # Преобразуем текст в HTML с явным указанием шрифта Calibri
+
         html_content = f"""
         <div style="font-family: Calibri; font-size: 12pt;">
         {about_content.replace("\n", "<br>")}
         </div>
         """
-        
-        # Проверяем, существует ли уже заметка "О программе"
+
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT id FROM notes WHERE title = ?", (about_title,))
             result = cursor.fetchone()
             
             if result:
-                # Если заметка уже существует, просто переходим к ней
                 note_id = result[0]
                 for i in range(self.notes_list.count()):
                     item = self.notes_list.item(i)
@@ -632,7 +612,6 @@ class NotesApp(QWidget):
                         break
                 return
 
-        # Если заметки нет, создаем новую
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -642,7 +621,6 @@ class NotesApp(QWidget):
             conn.commit()
             note_id = cursor.lastrowid
 
-        # Обновляем список заметок и переходим к новой заметке
         self.load_notes()
         for i in range(self.notes_list.count()):
             item = self.notes_list.item(i)
@@ -703,7 +681,6 @@ class NotesApp(QWidget):
     def load_notes(self):
         self.notes_list.clear()
         
-        # Получаем актуальные ID заметок из БД
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT id, title, created_at FROM notes ORDER BY id DESC")
@@ -713,22 +690,18 @@ class NotesApp(QWidget):
                 note_id = note[0]
                 current_ids.add(note_id)
                 
-                # Форматирование данных
                 title = note[1] if note[1] else "Без Названия"
                 date_obj = datetime.strptime(note[2].split('.')[0], '%Y-%m-%d %H:%M:%S')
                 date = f"{date_obj.day} {MONTHS[date_obj.month]} {date_obj.year} {date_obj.hour:02d}:{date_obj.minute:02d}"
 
-                # Создание элемента списка
                 item = QListWidgetItem()
                 item.setText(f"{title}\n{date}")
                 item.setData(Qt.ItemDataRole.UserRole, note_id)
                 self.notes_list.addItem(item)
                 
-                # Обновляем кэш только для новых заметок
                 if note_id not in self._notes_cache:
                     self._notes_cache[note_id] = {'title': note[1], 'content': None}
 
-        # Очищаем кэш от удаленных заметок
         for cached_id in list(self._notes_cache.keys()):
             if cached_id not in current_ids:
                 del self._notes_cache[cached_id]
@@ -747,12 +720,10 @@ class NotesApp(QWidget):
             if note_id != self.current_note_id:
                 self.current_note_id = note_id
                 
-                # Проверяем, загружено ли содержимое в кэш
                 if note_id in self._notes_cache:
                     cached_note = self._notes_cache[note_id]
                     self.title_input.setText(cached_note['title'])
                     
-                    # Если содержимое еще не загружено, загружаем его
                     if cached_note['content'] is None:
                         with sqlite3.connect(DB_FILE) as conn:
                             cursor = conn.cursor()
@@ -765,7 +736,6 @@ class NotesApp(QWidget):
                     else:
                         self.text_editor.setHtml(cached_note['content'])
                 else:
-                    # Если заметки нет в кэше, загружаем полностью
                     with sqlite3.connect(DB_FILE) as conn:
                         cursor = conn.cursor()
                         cursor.execute("UPDATE notes SET last_accessed = datetime('now', 'localtime') WHERE id = ?", (note_id,))
@@ -814,7 +784,6 @@ class NotesApp(QWidget):
             self.empty_state_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.right_layout.addWidget(self.empty_state_label)
         
-        # Применяем текущую тему к метке
         theme = get_theme(self.current_theme)
         self.empty_state_label.setStyleSheet(theme["empty_state_label"])
         self.empty_state_label.show()
@@ -919,11 +888,9 @@ class NotesApp(QWidget):
             
         format = QTextCharFormat()
         
-        # Проверяем текущее состояние жирности
         current_format = cursor.charFormat()
         is_bold = current_format.fontWeight() == QFont.Weight.Bold
-        
-        # Устанавливаем только свойство жирности, не трогая остальные
+
         if is_bold:
             format.setFontWeight(QFont.Weight.Normal)
         else:
@@ -938,11 +905,9 @@ class NotesApp(QWidget):
             
         format = QTextCharFormat()
         
-        # Проверяем текущее состояние курсива
         current_format = cursor.charFormat()
         is_italic = current_format.fontItalic()
-        
-        # Устанавливаем только свойство курсива, не трогая остальные
+
         format.setFontItalic(not is_italic)
         
         cursor.mergeCharFormat(format)
@@ -954,11 +919,9 @@ class NotesApp(QWidget):
             
         format = QTextCharFormat()
         
-        # Проверяем текущее состояние подчеркивания
         current_format = cursor.charFormat()
         is_underline = current_format.fontUnderline()
         
-        # Устанавливаем только свойство подчеркивания, не трогая остальные
         format.setFontUnderline(not is_underline)
         
         cursor.mergeCharFormat(format)
@@ -970,11 +933,9 @@ class NotesApp(QWidget):
             
         format = QTextCharFormat()
         
-        # Проверяем текущее состояние зачеркивания
         current_format = cursor.charFormat()
         is_strikeout = current_format.fontStrikeOut()
         
-        # Устанавливаем только свойство зачеркивания, не трогая остальные
         format.setFontStrikeOut(not is_strikeout)
         
         cursor.mergeCharFormat(format)
@@ -1028,7 +989,6 @@ class NotesApp(QWidget):
         theme = get_theme(self.current_theme)
         sort_menu.setStyleSheet(theme["sort_menu_style"])
 
-        # Добавляем пункты меню
         new_to_old = sort_menu.addAction("От новых к старым записям")
         old_to_new = sort_menu.addAction("От старых к новым записям")
         
@@ -1042,7 +1002,6 @@ class NotesApp(QWidget):
         modified_new = sort_menu.addAction("По времени последнего изменения (от новых к старым)")
         modified_old = sort_menu.addAction("По времени последнего изменения (от старых к новым)")
 
-        # Привязываем действия
         new_to_old.triggered.connect(lambda: self.sort_notes("date_desc"))
         old_to_new.triggered.connect(lambda: self.sort_notes("date_asc"))
         name_az.triggered.connect(lambda: self.sort_notes("name_asc"))
@@ -1050,7 +1009,6 @@ class NotesApp(QWidget):
         modified_new.triggered.connect(lambda: self.sort_notes("modified_desc"))
         modified_old.triggered.connect(lambda: self.sort_notes("modified_asc"))
 
-        # Показываем меню возле кнопки
         sort_menu.exec(self.sort_button.mapToGlobal(QPoint(0, -sort_menu.sizeHint().height())))
 
     def sort_notes(self, sort_type):
@@ -1067,7 +1025,7 @@ class NotesApp(QWidget):
                 cursor.execute("SELECT id, title, created_at FROM notes ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE DESC")
             elif sort_type == "modified_desc":
                 cursor.execute("SELECT id, title, created_at FROM notes ORDER BY last_accessed DESC")
-            else:  # modified_asc
+            else:  
                 cursor.execute("SELECT id, title, created_at FROM notes ORDER BY last_accessed ASC")
             
             self.notes_list.clear()

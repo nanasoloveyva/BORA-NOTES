@@ -9,9 +9,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import (
     QFont, QIcon, QTextCursor, QTextCharFormat, QShortcut, QKeySequence, QColor
 )
-from PyQt6.QtCore import Qt, QTimer, QMimeData, QPoint
+from PyQt6.QtCore import Qt, QTimer, QMimeData, QPoint, QUrl
 from PyQt6.QtWidgets import QVBoxLayout
 from themes import get_theme
+from PyQt6.QtGui import QDesktopServices
 
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
@@ -35,17 +36,17 @@ class CustomTextEdit(QTextEdit):
         custom_menu = QMenu(self)
         custom_menu.setFont(QFont("Calibri", 9))
         
-        theme_name = self.window().current_theme
+        main_window = self.window()
+        if not main_window or not hasattr(main_window, 'current_theme'):
+            return  
+        
+
+        has_selected_text = self.textCursor().hasSelection()
+        has_any_text = not self.document().isEmpty()
+        
+        theme_name = main_window.current_theme
         theme = get_theme(theme_name)
         custom_menu.setStyleSheet(theme["menu_style"])
-
-        undo_action = custom_menu.addAction(" ↩️  Отменить ")
-        undo_action.triggered.connect(self.undo)
-        
-        redo_action = custom_menu.addAction(" ↪️  Повторить ")
-        redo_action.triggered.connect(self.redo)
-        
-        custom_menu.addSeparator()
 
         format_menu = custom_menu.addMenu(" ✒️  Форматирование                ")
         format_menu.setStyleSheet(theme["menu_style"])
@@ -58,36 +59,135 @@ class CustomTextEdit(QTextEdit):
         format_menu.addSeparator()
         clear_format_action = format_menu.addAction("Очистить форматирование")
 
+        bold_action.setEnabled(has_selected_text)
+        italic_action.setEnabled(has_selected_text)
+        underline_action.setEnabled(has_selected_text)
+        strikethrough_action.setEnabled(has_selected_text)
+        highlight_action.setEnabled(has_selected_text)
+        clear_format_action.setEnabled(has_selected_text)
+        
+        # Добавляем меню специальных символов
+        special_symbols_menu = custom_menu.addMenu(" 🔣  Специальные символы                ")
+        special_symbols_menu.setStyleSheet(theme["menu_style"])
+        
+        empty_circle_action = special_symbols_menu.addAction("○ Пустой кружок")
+        full_circle_action = special_symbols_menu.addAction("● Тёмный кружок")
+        dark_arrow_action = special_symbols_menu.addAction("➤ Тёмная стрелочка")
+        check_mark_action = special_symbols_menu.addAction("✔ Галочка/готово!")
+        cross_mark_action = special_symbols_menu.addAction("✘ Крестик/не готово!")
+        music_note_action = special_symbols_menu.addAction("♫ Музыкальная нота")
+        heart_note_action = special_symbols_menu.addAction("♥︎ Заполененное сердечко")
+        
+        # Добавляем меню специальных эмоджи
+        special_emoji_menu = custom_menu.addMenu(" 😊  Специальные эмоджи                ")
+        special_emoji_menu.setStyleSheet(theme["menu_style"])
+        
+        purple_heart_action = special_emoji_menu.addAction("💜 Фиолетовое сердечко")
+        pushpin_action = special_emoji_menu.addAction("📌 Канцелярская кнопка")
+        star_action = special_emoji_menu.addAction("⭐ Звездочка")
+        calendar_action = special_emoji_menu.addAction("📅 Календарик")
+        note_action = special_emoji_menu.addAction("📝 Заметка")
+        exclamation_action = special_emoji_menu.addAction("‼️ Восклицательный знак")
+        coffee_action = special_emoji_menu.addAction("☕ Кофеек")
+        cake_action = special_emoji_menu.addAction("🍰 Тортик")
+        pill_action = special_emoji_menu.addAction("💊 Витаминка")
+        done_action = special_emoji_menu.addAction("✅ Сделано!")
+        cross_action = special_emoji_menu.addAction("❌ Крестик")
+        merch_action = special_emoji_menu.addAction("💸 На мерч бтс")
+
+        custom_menu.addSeparator()
+
         copy_action = custom_menu.addAction(" 📋  Копировать ")
         copy_action.triggered.connect(self.copy)
+        copy_action.setEnabled(has_selected_text)
         
         cut_action = custom_menu.addAction(" ✂️  Вырезать ")
         cut_action.triggered.connect(self.cut)
+        cut_action.setEnabled(has_selected_text)
         
         paste_action = custom_menu.addAction(" 📌  Вставить ")
         paste_action.triggered.connect(self.paste)
         
         select_all_action = custom_menu.addAction(" ✅  Выделить всё ")
         select_all_action.triggered.connect(self.selectAll)
+        select_all_action.setEnabled(has_any_text)
 
         custom_menu.addSeparator()
-        
-        delete_action = custom_menu.addAction(" ❌  Удалить ")
-        delete_action.triggered.connect(self.textCursor().removeSelectedText)
 
-        bold_action.triggered.connect(lambda: self.parent().toggle_bold())
-        italic_action.triggered.connect(lambda: self.parent().toggle_italic())
-        underline_action.triggered.connect(lambda: self.parent().toggle_underline())
-        strikethrough_action.triggered.connect(lambda: self.parent().toggle_strikethrough()) 
-        highlight_action.triggered.connect(lambda: self.parent().toggle_highlight())
+        # Безопасно подключаем действия форматирования
+        bold_action.triggered.connect(lambda: self.apply_formatting('bold'))
+        italic_action.triggered.connect(lambda: self.apply_formatting('italic'))
+        underline_action.triggered.connect(lambda: self.apply_formatting('underline'))
+        strikethrough_action.triggered.connect(lambda: self.apply_formatting('strikethrough'))
+        highlight_action.triggered.connect(lambda: self.apply_formatting('highlight'))
+        
         clear_format_action.triggered.connect(self.clear_formatting)
+        
+        empty_circle_action.triggered.connect(lambda: self.insert_special_character("○"))
+        full_circle_action.triggered.connect(lambda: self.insert_special_character("●"))
+        dark_arrow_action.triggered.connect(lambda: self.insert_special_character("➤"))
+        check_mark_action.triggered.connect(lambda: self.insert_special_character("✔"))
+        cross_mark_action.triggered.connect(lambda: self.insert_special_character("✘"))
+        music_note_action.triggered.connect(lambda: self.insert_special_character("♫"))
+        heart_note_action.triggered.connect(lambda: self.insert_special_character("♥︎"))
+
+        purple_heart_action.triggered.connect(lambda: self.insert_special_character("💜"))
+        pushpin_action.triggered.connect(lambda: self.insert_special_character("📌"))
+        star_action.triggered.connect(lambda: self.insert_special_character("⭐"))
+        calendar_action.triggered.connect(lambda: self.insert_special_character("📅"))
+        note_action.triggered.connect(lambda: self.insert_special_character("📝"))
+        exclamation_action.triggered.connect(lambda: self.insert_special_character("❗"))
+        coffee_action.triggered.connect(lambda: self.insert_special_character("☕"))
+        cake_action.triggered.connect(lambda: self.insert_special_character("🍰"))
+        pill_action.triggered.connect(lambda: self.insert_special_character("💊"))
+        done_action.triggered.connect(lambda: self.insert_special_character("✅"))
+        cross_action.triggered.connect(lambda: self.insert_special_character("❌"))
+        merch_action.triggered.connect(lambda: self.insert_special_character("💸"))
+
 
         custom_menu.exec(self.mapToGlobal(position))
+
+    def apply_formatting(self, format_type):
+        cursor = self.textCursor()
+        if not cursor.hasSelection():
+            return  # Если текст не выделен, ничего не делаем
+        
+        format = QTextCharFormat()
+        current_format = cursor.charFormat()
+        
+        if format_type == 'bold':
+            is_bold = current_format.fontWeight() == QFont.Weight.Bold
+            format.setFontWeight(QFont.Weight.Normal if is_bold else QFont.Weight.Bold)
+        elif format_type == 'italic':
+            format.setFontItalic(not current_format.fontItalic())
+        elif format_type == 'underline':
+            format.setFontUnderline(not current_format.fontUnderline())
+        elif format_type == 'strikethrough':
+            format.setFontStrikeOut(not current_format.fontStrikeOut())
+        elif format_type == 'highlight':
+            main_window = self.window()
+            theme_name = main_window.current_theme if hasattr(main_window, 'current_theme') else "light"
+            highlight_color = QColor("#775c88") if theme_name == "dark" else QColor("#e4d5ff")
+            
+            current_color = current_format.background().color()
+            if current_color.name() in [highlight_color.name(), "#e4d5ff", "#775c88"]:
+                format.setBackground(QColor("transparent"))
+            else:
+                format.setBackground(highlight_color)
+        
+        cursor.mergeCharFormat(format)
+
+    def insert_special_character(self, character):
+        cursor = self.textCursor()
+        cursor.insertText(character)
+        self.setTextCursor(cursor)
 
     def clear_formatting(self):
         cursor = self.textCursor()
         format = QTextCharFormat()
         format.setFont(self.default_font)
+
+        format.setBackground(QColor("transparent"))
         cursor.mergeCharFormat(format)
 
     def insertFromMimeData(self, source: QMimeData):
@@ -194,6 +294,9 @@ class NotesApp(QWidget):
         self.title_input.setPlaceholderText("Без Названия")
         self.title_input.textChanged.connect(self.auto_save)
 
+        self.title_input.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.title_input.customContextMenuRequested.connect(self.show_title_context_menu)
+
         self.separator = QWidget()
         self.separator.setFixedHeight(1)
 
@@ -233,6 +336,12 @@ class NotesApp(QWidget):
         self.settings_button.setStyleSheet("margin-left: -5px;")  # Сдвигаем влево на 2px
         bottom_layout.addWidget(self.settings_button)
 
+        self.spotify_button = QPushButton("💜")
+        self.spotify_button.setFixedSize(25, 23)
+        self.spotify_button.clicked.connect(self.open_spotify)
+        self.spotify_button.setStyleSheet("margin-left: -5px;")  # Такой же отступ как у кнопки настроек
+        bottom_layout.addWidget(self.spotify_button)
+
         bottom_layout.addStretch()
 
         self.counter_label = QLabel()
@@ -244,6 +353,87 @@ class NotesApp(QWidget):
         
         # Применяем тему
         self.apply_theme(self.current_theme)
+
+        self.toggle_button.setToolTip("Скрыть/показать список заметок")
+        self.btn_new.setToolTip("Создать новую заметку")
+        self.btn_delete.setToolTip("Удалить текущую заметку")
+        self.sort_button.setToolTip("Сортировка заметок")
+        self.settings_button.setToolTip("Настройки")
+        self.spotify_button.setToolTip("Открыть Spotify")
+
+    def show_title_context_menu(self, position):
+        """Показывает пользовательское контекстное меню для поля заголовка"""
+        context_menu = QMenu(self)
+        context_menu.setFont(QFont("Calibri", 9))
+        
+        theme = get_theme(self.current_theme)
+        context_menu.setStyleSheet(theme["menu_style"])
+        
+        has_selected_text = self.title_input.hasSelectedText()
+        has_any_text = bool(self.title_input.text())
+        
+        copy_action = context_menu.addAction(" 📋  Копировать ")
+        copy_action.triggered.connect(self.title_input.copy)
+        copy_action.setEnabled(has_selected_text)
+
+        cut_action = context_menu.addAction(" ✂️  Вырезать ")
+        cut_action.triggered.connect(self.title_input.cut)
+        cut_action.setEnabled(has_selected_text)
+        
+        paste_action = context_menu.addAction(" 📌  Вставить ")
+        paste_action.triggered.connect(self.title_input.paste)
+
+        
+        context_menu.exec(self.title_input.mapToGlobal(position))
+
+
+    def open_spotify(self):
+        show_spotify_confirmation = True
+        
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT value FROM settings WHERE key = 'show_spotify_confirmation'")
+                result = cursor.fetchone()
+                if result and result[0] == "False":
+                    show_spotify_confirmation = False
+        except sqlite3.Error as e:
+            print(f"Ошибка при проверке кнопки Spotify: {e}")
+        
+        if show_spotify_confirmation:
+            msg = QMessageBox()
+            msg.setWindowTitle("Открыть Spotify")
+            msg.setText("Вы хотите открыть сайт Spotify? Откроется страница с Вашими любимыми треками в браузере.")
+            checkbox = QCheckBox("Больше не напоминать")
+            msg.setCheckBox(checkbox)
+            
+            theme = get_theme(self.current_theme)
+            msg.setStyleSheet(theme["message_box"])
+            
+            yes_button = QPushButton("Да")
+            no_button = QPushButton("Нет")
+            msg.addButton(yes_button, QMessageBox.ButtonRole.YesRole)
+            msg.addButton(no_button, QMessageBox.ButtonRole.NoRole)
+            msg.exec()
+            
+            if checkbox.isChecked():
+                try:
+                    with sqlite3.connect(DB_FILE) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", 
+                                    ("show_spotify_confirmation", "False"))
+                        conn.commit()
+                except sqlite3.Error as e:
+                    print(f"Ошибка при сохранении настройки Spotify: {e}")
+            
+            if msg.clickedButton() != yes_button:
+                return
+        
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl("https://open.spotify.com/collection/tracks"))
+
+    
 
     def update_note_title(self):
         if not self.current_note_id:
@@ -310,9 +500,42 @@ class NotesApp(QWidget):
         self.btn_delete.setStyleSheet(theme["button_style"])
         self.sort_button.setStyleSheet(theme["sort_button"])
         self.settings_button.setStyleSheet(theme["settings_button"])
-    
+        self.spotify_button.setStyleSheet(theme["settings_button"])
 
+        QApplication.instance().setStyleSheet(theme["tooltip_style"])
+    
+        
+        self.update_highlight_color()
+        
         self.save_theme_setting(theme_name)
+
+    def update_highlight_color(self):
+        highlight_color = QColor("#775c88") if self.current_theme == "dark" else QColor("#e4d5ff")
+        old_highlight_color = QColor("#e4d5ff") if self.current_theme == "dark" else QColor("#775c88")
+        
+        cursor = self.text_editor.textCursor()
+        current_position = cursor.position()
+        
+        doc_cursor = QTextCursor(self.text_editor.document())
+        
+        doc_cursor.movePosition(QTextCursor.MoveOperation.Start)
+        
+        while not doc_cursor.atEnd():
+            doc_cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor)
+            
+            char_format = doc_cursor.charFormat()
+            
+            bg_color = char_format.background().color()
+            
+            if bg_color.name() in [old_highlight_color.name(), "#e4d5ff", "#775c88"]:
+                new_format = QTextCharFormat()
+                new_format.setBackground(highlight_color)
+                doc_cursor.mergeCharFormat(new_format)
+            
+            doc_cursor.clearSelection()
+        
+        cursor.setPosition(current_position)
+        self.text_editor.setTextCursor(cursor)
 
     def load_theme_setting(self):
         """Загружает сохраненную тему из базы данных"""
@@ -644,38 +867,90 @@ class NotesApp(QWidget):
         strikethrough_shortcut.activated.connect(self.toggle_strikethrough)
 
     
-
     def toggle_bold(self):
         cursor = self.text_editor.textCursor()
-        format = cursor.charFormat()
-        new_weight = QFont.Weight.Normal if format.fontWeight() == QFont.Weight.Bold else QFont.Weight.Bold
-        format.setFontWeight(new_weight)
-        cursor.mergeCharFormat(format)
-
-    def toggle_strikethrough(self):
-        cursor = self.text_editor.textCursor()
-        format = cursor.charFormat()
-        format.setFontStrikeOut(not format.fontStrikeOut())
+        if not cursor.hasSelection():
+            return
+            
+        format = QTextCharFormat()
+        
+        # Проверяем текущее состояние жирности
+        current_format = cursor.charFormat()
+        is_bold = current_format.fontWeight() == QFont.Weight.Bold
+        
+        # Устанавливаем только свойство жирности, не трогая остальные
+        if is_bold:
+            format.setFontWeight(QFont.Weight.Normal)
+        else:
+            format.setFontWeight(QFont.Weight.Bold)
+        
         cursor.mergeCharFormat(format)
 
     def toggle_italic(self):
         cursor = self.text_editor.textCursor()
-        format = cursor.charFormat()
-        format.setFontItalic(not format.fontItalic())
+        if not cursor.hasSelection():
+            return
+            
+        format = QTextCharFormat()
+        
+        # Проверяем текущее состояние курсива
+        current_format = cursor.charFormat()
+        is_italic = current_format.fontItalic()
+        
+        # Устанавливаем только свойство курсива, не трогая остальные
+        format.setFontItalic(not is_italic)
+        
         cursor.mergeCharFormat(format)
 
     def toggle_underline(self):
         cursor = self.text_editor.textCursor()
-        format = cursor.charFormat()
-        format.setFontUnderline(not format.fontUnderline())
+        if not cursor.hasSelection():
+            return
+            
+        format = QTextCharFormat()
+        
+        # Проверяем текущее состояние подчеркивания
+        current_format = cursor.charFormat()
+        is_underline = current_format.fontUnderline()
+        
+        # Устанавливаем только свойство подчеркивания, не трогая остальные
+        format.setFontUnderline(not is_underline)
+        
+        cursor.mergeCharFormat(format)
+
+    def toggle_strikethrough(self):
+        cursor = self.text_editor.textCursor()
+        if not cursor.hasSelection():
+            return
+            
+        format = QTextCharFormat()
+        
+        # Проверяем текущее состояние зачеркивания
+        current_format = cursor.charFormat()
+        is_strikeout = current_format.fontStrikeOut()
+        
+        # Устанавливаем только свойство зачеркивания, не трогая остальные
+        format.setFontStrikeOut(not is_strikeout)
+        
         cursor.mergeCharFormat(format)
 
     def toggle_highlight(self):
         cursor = self.text_editor.textCursor()
-        format = cursor.charFormat()
-        current_color = format.background().color()
-        new_color = QColor("transparent") if current_color == QColor("#e4d5ff") else QColor("#e4d5ff")
-        format.setBackground(new_color)
+        if not cursor.hasSelection():
+            return
+            
+        format = QTextCharFormat()
+        
+        highlight_color = QColor("#775c88") if self.current_theme == "dark" else QColor("#e4d5ff")
+        
+        current_format = cursor.charFormat()
+        current_color = current_format.background().color()
+
+        if current_color.name() in [highlight_color.name(), "#e4d5ff", "#775c88"]:
+            format.setBackground(QColor("transparent"))
+        else:
+            format.setBackground(highlight_color)
+        
         cursor.mergeCharFormat(format)
 
     def undo(self):

@@ -122,7 +122,7 @@ def get_theme(theme_name):
                 QMenu::item {
                     color: #7f7377;
                     padding: 5px 20px 5px 10px;
-                    margin: 2px 8px;
+                    margin: 2px 4px;
                     border-radius: 5px;
                     min-width: 180px;
                 }
@@ -131,13 +131,17 @@ def get_theme(theme_name):
                     color: #7f7377;
                     border-radius: 5px;
                 }
+                
+                QMenu::item:disabled {
+                    color: #dbdbdb;
+                }
                 QMenu::separator {
                     height: 1px;
                     background-color: #efe2e7;
-                    margin: 3px 10px;
+                    margin: 3px 5px;
                 }
             """,
-            
+                        
             "sort_menu_style": """
                 QMenu {
                     background-color: rgba(255, 255, 255, 0.95);
@@ -157,16 +161,33 @@ def get_theme(theme_name):
                     color: #7f7377;
                     border-radius: 5px;
                 }
+
                 QMenu::separator {
                     height: 1px;
                     background-color: #efe2e7;
-                    margin: 3px 10px;
+                    margin: 3px 5px;
+                }
+            """,
+
+            "tooltip_style": """
+                QToolTip {
+                    background-color: #f8f8f8;
+                    color: #333333;
+                    border: 1px solid #cccccc;
+                    padding: 2px;
+                    border-radius: 3px;
+                    font-family: Calibri;
+                    font-size: 11px;
                 }
             """,
             
             "message_box": "QMessageBox { background-color: #EDE7F6; } QPushButton { width: 120px; height: 30px; border-radius: 4px; background-color: #EDE7F6; border: 0.5px solid #efe2e7; padding: 5px 15px; } QPushButton:hover { background-color: #D1C4E9; } QCheckBox { background-color: #EDE7F6; }"
         },
         
+
+
+
+
         "dark": {
             "main_window": "* { font-family: Calibri; } QWidget { background-color: #1E1E1E; border-radius: 8px; }",
             "notes_list": """
@@ -281,7 +302,7 @@ def get_theme(theme_name):
                 QMenu::item {
                     color: #CCCCCC;
                     padding: 5px 20px 5px 10px;
-                    margin: 2px 8px;
+                    margin: 2px 4px;
                     border-radius: 5px;
                     min-width: 180px;
                 }
@@ -290,13 +311,17 @@ def get_theme(theme_name):
                     color: #CCCCCC;
                     border-radius: 5px;
                 }
+
+                QMenu::item:disabled {
+                    color: #dbdbdb;
+                }
                 QMenu::separator {
                     height: 1px;
                     background-color: #3C3C3C;
-                    margin: 3px 10px;
+                    margin: 3px 5px;
                 }
             """,
-            
+
             "sort_menu_style": """
                 QMenu {
                     background-color: rgba(45, 45, 45, 0.95);
@@ -319,7 +344,19 @@ def get_theme(theme_name):
                 QMenu::separator {
                     height: 1px;
                     background-color: #3C3C3C;
-                    margin: 3px 10px;
+                    margin: 3px 5px;
+                }
+            """,
+
+            "tooltip_style": """
+                QToolTip {
+                    background-color: #333333;
+                    color: #f8f8f8;
+                    border: 1px solid #555555;
+                    padding: 2px;
+                    border-radius: 3px;
+                    font-family: Calibri;
+                    font-size: 11px;
                 }
             """,
             

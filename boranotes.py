@@ -13,6 +13,7 @@ from PyQt6.QtCore import Qt, QTimer, QMimeData, QPoint, QUrl
 from PyQt6.QtWidgets import QVBoxLayout
 from themes import get_theme
 from PyQt6.QtGui import QDesktopServices
+from about import get_about_content, get_about_title
 
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
@@ -586,25 +587,69 @@ class NotesApp(QWidget):
         theme = get_theme(self.current_theme)
         settings_menu.setStyleSheet(theme["menu_style"])
         
-        # Добавляем пункты меню для выбора темы
         theme_menu = settings_menu.addMenu("Тема оформления")
         theme_menu.setStyleSheet(theme["menu_style"])
         
         light_theme = theme_menu.addAction("🌞 Светлая тема")
         dark_theme = theme_menu.addAction("🌛 Темная тема")
         
-        # Отмечаем текущую тему
-        if self.current_theme == "light":
-            light_theme.setIcon(QIcon(resource_path('check.png')))
-        else:
-            dark_theme.setIcon(QIcon(resource_path('check.png')))
-        
-        # Привязываем действия
         light_theme.triggered.connect(lambda: self.apply_theme("light"))
         dark_theme.triggered.connect(lambda: self.apply_theme("dark"))
         
-        # Показываем меню возле кнопки настроек
+        settings_menu.addSeparator()
+        
+        about_action = settings_menu.addAction("О программе")
+        about_action.triggered.connect(self.show_about_info)
+    
         settings_menu.exec(self.settings_button.mapToGlobal(QPoint(0, -settings_menu.sizeHint().height())))
+
+    def show_about_info(self):
+        """Создает или переходит к заметке 'О программе'"""
+        about_title = get_about_title()
+        about_content = get_about_content()
+        
+        # Преобразуем текст в HTML с явным указанием шрифта Calibri
+        html_content = f"""
+        <div style="font-family: Calibri; font-size: 12pt;">
+        {about_content.replace("\n", "<br>")}
+        </div>
+        """
+        
+        # Проверяем, существует ли уже заметка "О программе"
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM notes WHERE title = ?", (about_title,))
+            result = cursor.fetchone()
+            
+            if result:
+                # Если заметка уже существует, просто переходим к ней
+                note_id = result[0]
+                for i in range(self.notes_list.count()):
+                    item = self.notes_list.item(i)
+                    if item.data(Qt.ItemDataRole.UserRole) == note_id:
+                        self.notes_list.setCurrentItem(item)
+                        self.load_note()
+                        break
+                return
+
+        # Если заметки нет, создаем новую
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO notes (title, content, created_at, last_accessed) VALUES (?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))",
+                (about_title, html_content)
+            )
+            conn.commit()
+            note_id = cursor.lastrowid
+
+        # Обновляем список заметок и переходим к новой заметке
+        self.load_notes()
+        for i in range(self.notes_list.count()):
+            item = self.notes_list.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == note_id:
+                self.notes_list.setCurrentItem(item)
+                self.load_note()
+                break
 
     def resizeEvent(self, event):
         self.left_container.setMaximumWidth(self.width() - 90)

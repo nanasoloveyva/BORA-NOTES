@@ -105,6 +105,7 @@ class CustomTextEdit(QTextEdit):
         cross_action = special_emoji_menu.addAction("❌ Крестик")
         merch_action = special_emoji_menu.addAction("💸 На мерч бтс")
 
+        custom_menu.addSeparator()
         # Стандартные действия редактирования
         copy_action = custom_menu.addAction(" 📋  Копировать ")
         copy_action.triggered.connect(self.copy)

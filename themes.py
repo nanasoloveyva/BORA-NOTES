@@ -63,7 +63,7 @@ def get_theme(theme_name):
                 QTextEdit {
                     background-color: transparent;
                     border: none;
-                    color: #161616;
+                    color: #4d4d4d;
                 }
                 QScrollBar:vertical {
                     border: none;
@@ -121,7 +121,7 @@ def get_theme(theme_name):
                 }
                 QMenu::item {
                     color: #7f7377;
-                    padding: 5px 20px 5px 10px;
+                    padding: 4px 20px 6px 10px;
                     margin: 2px 4px;
                     border-radius: 5px;
                     min-width: 180px;
@@ -331,7 +331,7 @@ def get_theme(theme_name):
                 }
                 QMenu::item {
                     color: #CCCCCC;
-                    padding: 5px 20px 5px 10px;
+                    padding: 4px 20px 6px 10px;
                     margin: 2px 8px;
                     border-radius: 5px;
                     min-width: 280px;

@@ -36,7 +36,7 @@ class CustomTextEdit(QTextEdit):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.default_font = QFont("Calibri", 12)
+        self.default_font = QFont("Calibri", 11) # ВОТ ТУТ
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_custom_context_menu)
 
@@ -237,6 +237,19 @@ class NotesApp(QWidget):
 
         # Инициализация базы данных и интерфейса
         self.create_database()
+        
+        # Устанавливаем сортировку по умолчанию, если она еще не задана
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT value FROM settings WHERE key = 'sort_method'")
+                if not cursor.fetchone():
+                    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", 
+                                ("sort_method", "date_desc"))
+                    conn.commit()
+        except sqlite3.Error as e:
+            print(f"Ошибка при установке сортировки по умолчанию: {e}")
+        
         self.load_theme_setting()
         self.initUI()
         self.load_notes()
@@ -327,6 +340,7 @@ class NotesApp(QWidget):
         self.title_input.textChanged.connect(self.auto_save)
         self.title_input.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.title_input.customContextMenuRequested.connect(self.show_title_context_menu)
+        self.title_input.setTextMargins(-3, 6, 0, 0)  
 
         # Разделитель
         self.separator = QWidget()
@@ -334,10 +348,11 @@ class NotesApp(QWidget):
 
         # Текстовый редактор
         self.text_editor = CustomTextEdit()
-        self.text_editor.setFont(QFont("Calibri", 12))
+        self.text_editor.setFont(QFont("Calibri", 11))
         self.text_editor.textChanged.connect(self.auto_save)
         self.text_editor.textChanged.connect(self.auto_format)
         self.text_editor.textChanged.connect(self.update_counter)
+        self.text_editor.setViewportMargins(1, 0, 0, 0) 
 
         editor_layout.addWidget(self.title_input)
         editor_layout.addWidget(self.separator)
@@ -708,17 +723,46 @@ class NotesApp(QWidget):
 
             with sqlite3.connect(DB_FILE) as conn:
                 cursor = conn.cursor()
-                cursor.execute("UPDATE notes SET title = ?, content = ? WHERE id = ?", (title, content, self.current_note_id))
+                cursor.execute("UPDATE notes SET title = ?, content = ?, last_accessed = datetime('now', 'localtime') WHERE id = ?", 
+                            (title, content, self.current_note_id))
                 conn.commit()
 
             self._notes_cache[self.current_note_id] = {'title': title, 'content': content}
-            self.notes_list.blockSignals(True)
-            current_row = self.notes_list.currentRow()
-            self.load_notes()
-            self.notes_list.setCurrentRow(current_row)
-            self.notes_list.blockSignals(False)
+            
+            # Проверяем текущий способ сортировки
+            current_sort = None
+            try:
+                cursor.execute("SELECT value FROM settings WHERE key = 'sort_method'")
+                result = cursor.fetchone()
+                if result:
+                    current_sort = result[0]
+            except sqlite3.Error:
+                pass
+            
+            # Если сортировка по времени последнего изменения, обновляем список
+            if current_sort in ["modified_desc", "modified_asc"]:
+                self.notes_list.blockSignals(True)
+                current_row = self.notes_list.currentRow()
+                self.load_notes()  # Перезагружаем список заметок с учетом новой сортировки
+                
+                # Находим и выбираем текущую заметку в обновленном списке
+                for i in range(self.notes_list.count()):
+                    if self.notes_list.item(i).data(Qt.ItemDataRole.UserRole) == self.current_note_id:
+                        self.notes_list.setCurrentRow(i)
+                        break
+                
+                self.notes_list.blockSignals(False)
+            else:
+                # Для других типов сортировки просто обновляем заголовок
+                self.notes_list.blockSignals(True)
+                current_row = self.notes_list.currentRow()
+                self.load_notes()
+                self.notes_list.setCurrentRow(current_row)
+                self.notes_list.blockSignals(False)
+            
             self.need_save = False
         self._save_timer.stop()
+
 
     def create_database(self):
         """Создает базу данных, если она не существует"""
@@ -733,10 +777,35 @@ class NotesApp(QWidget):
         """Загружает список заметок из базы данных"""
         self.notes_list.clear()
         
-        # Получаем актуальные ID заметок из БД
+        # Получаем текущий способ сортировки
+        current_sort = "date_desc"  # По умолчанию
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT value FROM settings WHERE key = 'sort_method'")
+                result = cursor.fetchone()
+                if result:
+                    current_sort = result[0]
+        except sqlite3.Error:
+            pass
+        
+        # Получаем актуальные ID заметок из БД с учетом сортировки
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, title, created_at FROM notes ORDER BY id DESC")
+            
+            if current_sort == "date_desc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY created_at DESC")
+            elif current_sort == "date_asc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY created_at ASC")
+            elif current_sort == "name_asc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE ASC")
+            elif current_sort == "name_desc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE DESC")
+            elif current_sort == "modified_desc":
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY last_accessed DESC")
+            else:  # modified_asc
+                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY last_accessed ASC")
+            
             current_ids = set()
             
             for note in cursor.fetchall():
@@ -1076,19 +1145,32 @@ class NotesApp(QWidget):
         theme = get_theme(self.current_theme)
         sort_menu.setStyleSheet(theme["sort_menu_style"])
 
-        # Добавляем пункты меню
-        new_to_old = sort_menu.addAction("От новых к старым записям")
-        old_to_new = sort_menu.addAction("От старых к новым записям")
+        # Получаем текущий способ сортировки из базы данных
+        current_sort = "date_desc"  # По умолчанию - от новых к старым
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT value FROM settings WHERE key = 'sort_method'")
+                result = cursor.fetchone()
+                if result:
+                    current_sort = result[0]
+        except sqlite3.Error:
+            # Если произошла ошибка, используем значение по умолчанию
+            pass
+
+        # Добавляем пункты меню с галочкой для активного способа сортировки
+        new_to_old = sort_menu.addAction("От новых к старым записям" + ("   ✓" if current_sort == "date_desc" else ""))
+        old_to_new = sort_menu.addAction("От старых к новым записям" + ("   ✓" if current_sort == "date_asc" else ""))
         
         sort_menu.addSeparator()
         
-        name_az = sort_menu.addAction("По имени файла (от А до Я)")
-        name_za = sort_menu.addAction("По имени файла (от Я до А)")
+        name_az = sort_menu.addAction("По имени файла (от А до Я)" + ("   ✓" if current_sort == "name_asc" else ""))
+        name_za = sort_menu.addAction("По имени файла (от Я до А)" + ("   ✓" if current_sort == "name_desc" else ""))
         
         sort_menu.addSeparator()
         
-        modified_new = sort_menu.addAction("По времени последнего изменения (от новых к старым)")
-        modified_old = sort_menu.addAction("По времени последнего изменения (от старых к новым)")
+        modified_new = sort_menu.addAction("По времени последнего изменения (от новых к старым)" + ("   ✓" if current_sort == "modified_desc" else ""))
+        modified_old = sort_menu.addAction("По времени последнего изменения (от старых к новым)" + ("   ✓" if current_sort == "modified_asc" else ""))
 
         # Привязываем действия
         new_to_old.triggered.connect(lambda: self.sort_notes("date_desc"))
@@ -1098,11 +1180,28 @@ class NotesApp(QWidget):
         modified_new.triggered.connect(lambda: self.sort_notes("modified_desc"))
         modified_old.triggered.connect(lambda: self.sort_notes("modified_asc"))
 
-        # Показываем меню возле кнопки
-        sort_menu.exec(self.sort_button.mapToGlobal(QPoint(0, -sort_menu.sizeHint().height())))
+        # Показываем меню возле кнопки, но направленное вверх
+        menu_height = sort_menu.sizeHint().height()
+        sort_menu.exec(self.sort_button.mapToGlobal(QPoint(0, -menu_height)))
 
     def sort_notes(self, sort_type):
         """Сортирует список заметок по выбранному критерию"""
+        # Сохраняем выбранный способ сортировки
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                # Проверяем существование таблицы settings
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
+                if not cursor.fetchone():
+                    # Если таблицы нет, создаем ее
+                    cursor.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+                
+                cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", 
+                            ("sort_method", sort_type))
+                conn.commit()
+        except sqlite3.Error as e:
+            print(f"Ошибка при сохранении способа сортировки: {e}")
+        
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
             
@@ -1119,6 +1218,11 @@ class NotesApp(QWidget):
             else:  # modified_asc
                 cursor.execute("SELECT id, title, created_at FROM notes ORDER BY last_accessed ASC")
             
+            # Сохраняем текущий выбранный элемент
+            current_id = None
+            if self.notes_list.currentItem():
+                current_id = self.notes_list.currentItem().data(Qt.ItemDataRole.UserRole)
+            
             self.notes_list.clear()
             for note in cursor.fetchall():
                 title = note[1] if note[1] else "Без названия"
@@ -1129,6 +1233,13 @@ class NotesApp(QWidget):
                 item.setText(f"{title}\n{date}")
                 item.setData(Qt.ItemDataRole.UserRole, note[0])
                 self.notes_list.addItem(item)
+            
+            # Восстанавливаем выбор, если возможно
+            if current_id:
+                for i in range(self.notes_list.count()):
+                    if self.notes_list.item(i).data(Qt.ItemDataRole.UserRole) == current_id:
+                        self.notes_list.setCurrentRow(i)
+                        break
 
 
 if __name__ == "__main__":

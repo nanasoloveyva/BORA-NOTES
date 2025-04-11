@@ -313,7 +313,7 @@ def get_theme(theme_name):
                 }
 
                 QMenu::item:disabled {
-                    color: #dbdbdb;
+                    color: #4b4b4b;
                 }
                 QMenu::separator {
                     height: 1px;

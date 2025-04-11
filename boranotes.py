@@ -1656,13 +1656,13 @@ class NotesApp(QWidget):
             if self.current_theme == "dark":
                 inactive_style = """
                     QPushButton {
-                        background-color: #2f2f2f;
+                        background-color: #232323;
                         color: #555;
                         border: none;
                         border-radius: 3px;
                     }
                     QPushButton:hover {
-                        background-color: #2f2f2f;
+                        background-color: #232323;
                     }
                 """
             else:
@@ -1679,6 +1679,7 @@ class NotesApp(QWidget):
                 """
             self.btn_color.setStyleSheet(inactive_style)
             self.btn_size.setStyleSheet(inactive_style)
+
 
 
 

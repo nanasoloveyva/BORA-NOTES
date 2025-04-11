@@ -333,12 +333,20 @@ class NotesApp(QWidget):
         self.btn_color.setToolTip("Изменить цвет текста")
         self.btn_color.setEnabled(False)
 
+        # Добавляем кнопку изменения размера текста
+        self.btn_size = QPushButton("🤏")
+        self.btn_size.setFixedSize(24, 24)
+        self.btn_size.clicked.connect(self.show_size_menu)
+        self.btn_size.setToolTip("Изменить размер текста")
+        self.btn_size.setEnabled(False)
+
         # Добавляем элементы в layout
         buttons_layout.addWidget(self.toggle_button)
         buttons_layout.addWidget(self.btn_new)
         buttons_layout.addWidget(self.btn_delete)
         buttons_layout.addWidget(self.button_separator)
         buttons_layout.addWidget(self.btn_color)
+        buttons_layout.addWidget(self.btn_size)  # Добавляем новую кнопку
         buttons_layout.addStretch()
         self.right_layout.addLayout(buttons_layout)
 
@@ -565,7 +573,6 @@ class NotesApp(QWidget):
         separator_color = "#555555" if theme_name == "dark" else "#ccc"
         self.button_separator.setStyleSheet(f"background-color: {separator_color};")
         
-        # Обновляем состояние кнопки цвета, если она существует
         if hasattr(self, 'btn_color'):
             self.update_color_button_state()
 
@@ -1423,8 +1430,6 @@ class NotesApp(QWidget):
         
         self.auto_save()
 
-
-
     def update_default_text_colors(self):
         """Обновляет цвета текста по умолчанию при смене темы"""
         default_color = QColor("#2f2f2f") if self.current_theme == "light" else QColor("#ffffff")
@@ -1444,7 +1449,6 @@ class NotesApp(QWidget):
                 cursor.mergeCharFormat(new_format)
             
             cursor.clearSelection()
-
 
     def update_color_button_state(self):
         """Обновляет состояние кнопки изменения цвета в зависимости от выделения текста"""
@@ -1500,6 +1504,182 @@ class NotesApp(QWidget):
                 cursor.mergeCharFormat(new_format)
             
             cursor.clearSelection()
+
+    def show_size_menu(self):
+        """Показывает меню для изменения размера текста"""
+        if not self.text_editor.textCursor().hasSelection():
+            return
+            
+        size_menu = QMenu(self)
+        size_menu.setFont(QFont("Calibri", 9))
+        
+        # Создаем сетку размеров
+        size_grid = QWidget()
+        
+        # Устанавливаем фон и границу в зависимости от темы
+        if self.current_theme == "dark":
+            # Для темной темы - цвет 3a3a3a
+            size_grid.setStyleSheet("background-color: #3a3a3a; border-radius: 3px;")
+        else:
+            # Для светлой темы - цвет fefefe с обводкой f2f2f2
+            size_grid.setStyleSheet("""
+                background-color: #fefefe; 
+                border-radius: 3px;
+                border: 1px solid #f2f2f2;
+            """)
+        
+        grid_layout = QGridLayout(size_grid)
+        grid_layout.setSpacing(4)
+        
+        # Создаем кнопки размеров
+        size_buttons = [
+            {"text": "H1", "size": 18, "tooltip": "Заголовок 1 уровня"},
+            {"text": "H2", "size": 14, "tooltip": "Заголовок 2 уровня"},
+            {"text": "н", "size": 11, "tooltip": "Размер по умолчанию"},
+            {"text": ".", "size": 9, "tooltip": "Ваще мелебнкий шрифт жестб"}
+        ]
+        
+        # Размещаем кнопки в сетке горизонтально
+        for col, button_info in enumerate(size_buttons):
+            size_button = QPushButton(button_info["text"])
+            # Устанавливаем размер 20x20
+            size_button.setFixedSize(20, 20)
+            size_button.setToolTip(button_info["tooltip"])
+            
+            # Настраиваем шрифт для кнопок
+            font = size_button.font()
+            font.setPointSize(8)  # Немного уменьшаем размер шрифта
+            size_button.setFont(font)
+            
+            # Добавляем обводку и эффект при наведении в зависимости от темы
+            if self.current_theme == "dark":
+                size_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #555;
+                        color: #fff;
+                        border: 1px solid #555555; 
+                        border-radius: 3px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        border: 1px solid #4a4545;
+                        background-color: #666;
+                    }
+                    QPushButton:pressed {
+                        border: 1px solid #4a4545;
+                    }
+                """)
+            else:
+                size_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #f0f0f0;
+                        color: #333;
+                        border: 1px solid #efe2e7; 
+                        border-radius: 3px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        border: 1px solid #e5d3da;
+                        background-color: #e0e0e0;
+                    }
+                    QPushButton:pressed {
+                        border: 1px solid #e5d3da;
+                    }
+                """)
+            
+            # Подключаем обработчик нажатия
+            font_size = button_info["size"]
+            size_button.clicked.connect(lambda checked=False, size=font_size: self.apply_font_size_and_clear(size))
+            
+            grid_layout.addWidget(size_button, 0, col)
+        
+        # Настраиваем отступы для сетки
+        grid_layout.setContentsMargins(7, 4, 7, 4)
+        
+        # Создаем действие для вставки виджета сетки в меню
+        action = QWidgetAction(size_menu)
+        action.setDefaultWidget(size_grid)
+        size_menu.addAction(action)
+        
+        # Убираем стандартные границы и фон меню
+        size_menu.setStyleSheet("""
+            QMenu {
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        
+        # Показываем меню под кнопкой
+        size_menu.exec(self.btn_size.mapToGlobal(QPoint(0, self.btn_size.height())))
+
+
+
+    def apply_font_size_and_clear(self, size):
+        """Применяет выбранный размер шрифта к выделенному тексту и сбрасывает выделение"""
+        cursor = self.text_editor.textCursor()
+        if not cursor.hasSelection():
+            return
+            
+        # Сохраняем позицию конца выделения
+        end_position = cursor.selectionEnd()
+        
+        # Применяем размер шрифта
+        format = QTextCharFormat()
+        format.setFontPointSize(size)
+        cursor.mergeCharFormat(format)
+        
+        # Сбрасываем выделение, устанавливая курсор в конец бывшего выделения
+        cursor.setPosition(end_position)
+        self.text_editor.setTextCursor(cursor)
+        
+        # Закрываем меню
+        QApplication.activePopupWidget().close() if QApplication.activePopupWidget() else None
+        
+        # Явно устанавливаем фокус обратно на текстовый редактор
+        self.text_editor.setFocus()
+        
+        # Сохраняем изменения
+        self.auto_save()
+
+    def update_color_button_state(self):
+        """Обновляет состояние кнопок форматирования в зависимости от выделения текста"""
+        has_selection = self.text_editor.textCursor().hasSelection()
+        self.btn_color.setEnabled(has_selection)
+        self.btn_size.setEnabled(has_selection)  # Добавляем обновление состояния кнопки размера
+        
+        theme = get_theme(self.current_theme)
+        if has_selection:
+            # Используем тот же стиль, что и для других кнопок
+            self.btn_color.setStyleSheet(theme["button_style"])
+            self.btn_size.setStyleSheet(theme["button_style"])
+        else:
+            if self.current_theme == "dark":
+                inactive_style = """
+                    QPushButton {
+                        background-color: #2f2f2f;
+                        color: #555;
+                        border: none;
+                        border-radius: 3px;
+                    }
+                    QPushButton:hover {
+                        background-color: #2f2f2f;
+                    }
+                """
+            else:
+                inactive_style = """
+                    QPushButton {
+                        background-color: #e0e0e0;
+                        color: #555;
+                        border: none;
+                        border-radius: 3px;
+                    }
+                    QPushButton:hover {
+                        background-color: #e0e0e0;
+                    }
+                """
+            self.btn_color.setStyleSheet(inactive_style)
+            self.btn_size.setStyleSheet(inactive_style)
+
 
 
 if __name__ == "__main__":

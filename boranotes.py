@@ -1343,7 +1343,7 @@ class NotesApp(QWidget):
                 
                 grid_layout.addWidget(color_button, row, col)
         
-        default_button = QPushButton("По умолчанию")
+        default_button = QPushButton("По умолчанию темы")
         default_button.setFixedHeight(20)  
         default_button.setFont(QFont("Calibri", 8))
         
@@ -1407,7 +1407,7 @@ class NotesApp(QWidget):
         format = QTextCharFormat()
         
         if color == "default":
-            default_color = QColor("#000000") if self.current_theme == "light" else QColor("#ffffff")
+            default_color = QColor("#2f2f2f") if self.current_theme == "light" else QColor("#ffffff")
             format.setForeground(default_color)
         else:
             format.setForeground(QColor(color))

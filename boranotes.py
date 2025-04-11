@@ -5,7 +5,7 @@ from datetime import datetime
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QListWidget, QListWidgetItem,
-    QTextEdit, QHBoxLayout, QLineEdit, QLabel, QMessageBox, QCheckBox, QSplitter, QMenu
+    QTextEdit, QHBoxLayout, QLineEdit, QLabel, QMessageBox, QCheckBox, QSplitter, QMenu, QGridLayout, QWidgetAction 
 )
 from PyQt6.QtGui import (
     QFont, QIcon, QTextCursor, QTextCharFormat, QShortcut, QKeySequence, QColor,
@@ -321,9 +321,24 @@ class NotesApp(QWidget):
         self.btn_delete.clicked.connect(self.delete_note)
         self.btn_delete.setToolTip("Удалить текущую заметку")
 
+        # Добавляем вертикальный разделитель
+        self.button_separator = QWidget()
+        self.button_separator.setFixedSize(1, 24)
+        self.button_separator.setStyleSheet("background-color: #ccc;")  # Цвет разделителя
+
+        # Добавляем кнопку изменения цвета текста
+        self.btn_color = QPushButton("🎨")
+        self.btn_color.setFixedSize(24, 24)
+        self.btn_color.clicked.connect(self.show_color_palette)
+        self.btn_color.setToolTip("Изменить цвет текста")
+        self.btn_color.setEnabled(False)
+
+        # Добавляем элементы в layout
         buttons_layout.addWidget(self.toggle_button)
         buttons_layout.addWidget(self.btn_new)
         buttons_layout.addWidget(self.btn_delete)
+        buttons_layout.addWidget(self.button_separator)
+        buttons_layout.addWidget(self.btn_color)
         buttons_layout.addStretch()
         self.right_layout.addLayout(buttons_layout)
 
@@ -352,7 +367,8 @@ class NotesApp(QWidget):
         self.text_editor.textChanged.connect(self.auto_save)
         self.text_editor.textChanged.connect(self.auto_format)
         self.text_editor.textChanged.connect(self.update_counter)
-        self.text_editor.setViewportMargins(1, 0, 0, 0) 
+        self.text_editor.selectionChanged.connect(self.update_color_button_state)  # Добавьте эту строку
+        self.text_editor.setViewportMargins(1, 0, 0, 0)
 
         editor_layout.addWidget(self.title_input)
         editor_layout.addWidget(self.separator)
@@ -544,11 +560,20 @@ class NotesApp(QWidget):
         self.sort_button.setStyleSheet(theme["sort_button"])
         self.settings_button.setStyleSheet(theme["settings_button"])
         self.spotify_button.setStyleSheet(theme["settings_button"])
+        
+        # Устанавливаем цвет разделителя в зависимости от темы
+        separator_color = "#555555" if theme_name == "dark" else "#ccc"
+        self.button_separator.setStyleSheet(f"background-color: {separator_color};")
+        
+        # Обновляем состояние кнопки цвета, если она существует
+        if hasattr(self, 'btn_color'):
+            self.update_color_button_state()
 
         QApplication.instance().setStyleSheet(theme["tooltip_style"])
         
         self.update_highlight_color()
         self.save_theme_setting(theme_name)
+
 
     def update_highlight_color(self):
         """Обновляет цвет выделения текста при смене темы"""
@@ -1240,6 +1265,241 @@ class NotesApp(QWidget):
                     if self.notes_list.item(i).data(Qt.ItemDataRole.UserRole) == current_id:
                         self.notes_list.setCurrentRow(i)
                         break
+
+
+    def show_color_palette(self):
+        """Показывает палитру предустановленных цветов для текста"""
+        if not self.text_editor.textCursor().hasSelection():
+            return
+            
+        color_menu = QMenu(self)
+        color_menu.setFont(QFont("Calibri", 9))
+        
+        color_grid = QWidget()
+        
+        if self.current_theme == "dark":
+            color_grid.setStyleSheet("background-color: #3a3a3a; border-radius: 3px;")
+        else:
+            color_grid.setStyleSheet("""
+                background-color: #fefefe; 
+                border-radius: 3px;
+                border: 1px solid #f2f2f2;
+            """)
+        
+        grid_layout = QGridLayout(color_grid)
+        grid_layout.setSpacing(4)  
+        grid_layout.setHorizontalSpacing(6)  
+        
+        colors = [
+            # Первый столбец
+            ["#aa95cf", "#c7b4e9", "#e2d3fd", "#eadcff"],
+            # Второй столбец
+            ["#cf95b8", "#e9b4e2", "#fdd3ef", "#ffdcff"],
+            # Третий столбец
+            ["#818ec4", "#b4b5e9", "#d3e3fd", "#dcfffe"],
+            # Четвертый столбец
+            ["#97cf95", "#b4e9b7", "#d3fddd", "#e8ffe7"],
+            # Пятый столбец
+            ["#fda553", "#fdb877", "#ffd0a5", "#ffe9d5"],
+            # Шестой столбец
+            ["#182ef3", "#ff0f0f", "#17ca1a", "#8f17ca"]
+        ]
+        
+        for col, column_colors in enumerate(colors):
+            for row, color in enumerate(column_colors):
+                color_button = QPushButton()
+                color_button.setFixedSize(18, 18)  
+                
+                if self.current_theme == "dark":
+                    color_button.setStyleSheet(f"""
+                        QPushButton {{
+                            background-color: {color}; 
+                            border: 1px solid #555555; 
+                            border-radius: 3px;
+                        }}
+                        QPushButton:hover {{
+                            border: 1px solid #4a4545;
+                        }}
+                        QPushButton:pressed {{
+                            border: 1px solid #4a4545;
+                        }}
+                    """)
+                else:
+                    color_button.setStyleSheet(f"""
+                        QPushButton {{
+                            background-color: {color}; 
+                            border: 1px solid #efe2e7; 
+                            border-radius: 3px;
+                        }}
+                        QPushButton:hover {{
+                            border: 1px solid #e5d3da;
+                        }}
+                        QPushButton:pressed {{
+                            border: 1px solid #e5d3da;
+                        }}
+                    """)
+                
+                color_button.clicked.connect(lambda checked, c=color: self.apply_text_color_and_clear(c))
+                
+                grid_layout.addWidget(color_button, row, col)
+        
+        default_button = QPushButton("По умолчанию")
+        default_button.setFixedHeight(20)  
+        default_button.setFont(QFont("Calibri", 8))
+        
+        if self.current_theme == "dark":
+            default_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #555;
+                    color: #fff;
+                    border: none;
+                    border-radius: 3px;
+                    padding: 2px;
+                    font-weight: normal;
+                    text-align: center;
+                }
+                QPushButton:hover {
+                    background-color: #666;
+                }
+            """)
+        else:
+            default_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #f0f0f0;
+                    color: #333;
+                    border: none;
+                    border-radius: 3px;
+                    padding: 2px;
+                    font-weight: normal;
+                    text-align: center;
+                }
+                QPushButton:hover {
+                    background-color: #e0e0e0;
+                }
+            """)
+        
+        default_button.clicked.connect(lambda: self.apply_text_color_and_clear("default"))
+        grid_layout.addWidget(default_button, 4, 0, 1, 6) 
+        
+        grid_layout.setContentsMargins(5, 5, 5, 5)
+        
+        action = QWidgetAction(color_menu)
+        action.setDefaultWidget(color_grid)
+        color_menu.addAction(action)
+
+        color_menu.setStyleSheet("""
+            QMenu {
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        
+        color_menu.exec(self.btn_color.mapToGlobal(QPoint(0, self.btn_color.height())))
+
+    def apply_text_color_and_clear(self, color):
+        """Применяет выбранный цвет к выделенному тексту и сбрасывает выделение"""
+        cursor = self.text_editor.textCursor()
+        if not cursor.hasSelection():
+            return
+            
+        end_position = cursor.selectionEnd()
+        
+        format = QTextCharFormat()
+        
+        if color == "default":
+            default_color = QColor("#000000") if self.current_theme == "light" else QColor("#ffffff")
+            format.setForeground(default_color)
+        else:
+            format.setForeground(QColor(color))
+        
+        cursor.mergeCharFormat(format)
+        
+        cursor.setPosition(end_position)
+        self.text_editor.setTextCursor(cursor)
+        
+        QApplication.activePopupWidget().close() if QApplication.activePopupWidget() else None
+
+        self.text_editor.setFocus()
+        
+        self.auto_save()
+
+
+
+    def update_default_text_colors(self):
+        """Обновляет цвета текста по умолчанию при смене темы"""
+        default_color = QColor("#2f2f2f") if self.current_theme == "light" else QColor("#ffffff")
+        
+        cursor = QTextCursor(self.text_editor.document())
+        
+        while not cursor.atEnd():
+            cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor)
+            
+            char_format = cursor.charFormat()
+            current_color = char_format.foreground().color()
+            
+            opposite_default = QColor("#ffffff") if self.current_theme == "light" else QColor("#2f2f2f")
+            if current_color.name() == opposite_default.name():
+                new_format = QTextCharFormat()
+                new_format.setForeground(default_color)
+                cursor.mergeCharFormat(new_format)
+            
+            cursor.clearSelection()
+
+
+    def update_color_button_state(self):
+        """Обновляет состояние кнопки изменения цвета в зависимости от выделения текста"""
+        has_selection = self.text_editor.textCursor().hasSelection()
+        self.btn_color.setEnabled(has_selection)
+        
+        theme = get_theme(self.current_theme)
+        if has_selection:
+            self.btn_color.setStyleSheet(theme["button_style"])
+        else:
+            if self.current_theme == "dark":
+                inactive_style = """
+                    QPushButton {
+                        background-color: #2f2f2f;
+                        color: #555;
+                        border: none;
+                        border-radius: 3px;
+                    }
+                    QPushButton:hover {
+                        background-color: #2f2f2f;
+                    }
+                """
+            else:
+                inactive_style = """
+                    QPushButton {
+                        background-color: #e0e0e0;
+                        color: #555;
+                        border: none;
+                        border-radius: 3px;
+                    }
+                    QPushButton:hover {
+                        background-color: #e0e0e0;
+                    }
+                """
+            self.btn_color.setStyleSheet(inactive_style)
+
+    def update_default_text_colors(self):
+        """Обновляет цвета текста по умолчанию при смене темы"""
+        default_color = QColor("#2f2f2f") if self.current_theme == "light" else QColor("#ffffff")
+        
+        cursor = QTextCursor(self.text_editor.document())
+
+        while not cursor.atEnd():
+            cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor)
+            
+            char_format = cursor.charFormat()
+            current_color = char_format.foreground().color()
+            
+            opposite_default = QColor("#ffffff") if self.current_theme == "light" else QColor("#2f2f2f")
+            if current_color.name() == opposite_default.name():
+                new_format = QTextCharFormat()
+                new_format.setForeground(default_color)
+                cursor.mergeCharFormat(new_format)
+            
+            cursor.clearSelection()
 
 
 if __name__ == "__main__":

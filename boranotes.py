@@ -579,7 +579,8 @@ class NotesApp(QWidget):
                 {"icon": "📓", "name": "Личное", "id": "personal"},
                 {"icon": "📚", "name": "Учеба", "id": "study"},
                 {"icon": "👔", "name": "Работа", "id": "work"},
-                {"icon": "🏡", "name": "Ежедневное", "id": "daily"}
+                {"icon": "🏡", "name": "Ежедневное", "id": "daily"},
+                {"icon": "☁️", "name": "Вдохновение", "id": "inspiration"}
             ]
             
             # Проверяем, достигнут ли лимит категорий
@@ -1019,7 +1020,8 @@ class NotesApp(QWidget):
             {"icon": "📓", "name": "Личное", "id": "personal"},
             {"icon": "📚", "name": "Учеба", "id": "study"},
             {"icon": "👔", "name": "Работа", "id": "work"},
-            {"icon": "🏡", "name": "Ежедневное", "id": "daily"}
+            {"icon": "🏡", "name": "Ежедневное", "id": "daily"},
+            {"icon": "☁️", "name": "Вдохновение", "id": "inspiration"}
         ]
         
         for category in categories:
@@ -2087,7 +2089,8 @@ class NotesApp(QWidget):
             "personal": "📓",
             "study": "📚",
             "work": "👔",
-            "daily": "🏡"
+            "daily": "🏡",
+            "inspiration": "☁️"
         }
         
         category_display = ""

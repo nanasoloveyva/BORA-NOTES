@@ -22,7 +22,7 @@ def get_theme(theme_name):
                     box-shadow: 0 2px 4px rgba(248, 241, 243, 0.3);
                 }
                 QListWidget::item {
-                    padding: 10px;
+                    padding: 5px;
                     margin: 5px;
                     background: #EDE7F6;
                     border-radius: 4px;

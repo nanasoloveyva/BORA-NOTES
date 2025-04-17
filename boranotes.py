@@ -293,8 +293,10 @@ class NotesApp(QWidget):
 
         # Список заметок
         self.notes_list = QListWidget()
+        self.notes_list.setWordWrap(True)  # Включаем перенос текста
+        self.notes_list.setTextElideMode(Qt.TextElideMode.ElideNone)  # Отключаем сокращение текста
         self.notes_list.itemClicked.connect(self.load_note)
-        self.notes_list.currentItemChanged.connect(self.on_item_selection_changed) 
+        self.notes_list.currentItemChanged.connect(self.on_item_selection_changed)
         self.notes_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.notes_list.customContextMenuRequested.connect(self.show_notes_list_context_menu)
         left_layout.addWidget(self.notes_list)
@@ -408,6 +410,12 @@ class NotesApp(QWidget):
         self.sort_button.clicked.connect(self.show_sort_menu)
         self.sort_button.setToolTip("Сортировка заметок")
         bottom_layout.addWidget(self.sort_button)
+
+        self.category_button = QPushButton("🗂️")
+        self.category_button.setFixedSize(25, 23)
+        self.category_button.clicked.connect(self.show_category_menu)
+        self.category_button.setToolTip("Категории заметок")
+        bottom_layout.addWidget(self.category_button)
 
         self.settings_button = QPushButton("⚙️")
         self.settings_button.setFixedSize(25, 23)
@@ -552,8 +560,50 @@ class NotesApp(QWidget):
                 pin_action.setEnabled(False)
                 pin_action.setText("⭐ Закрепить (достигнут лимит)")
             
+            # Добавляем действие для удаления
             delete_action = context_menu.addAction(" ❌ Удалить запись ")
             delete_action.triggered.connect(self.delete_note)
+            
+            # Добавляем разделитель
+            context_menu.addSeparator()
+            
+            # Получаем текущие категории заметки
+            current_categories = self._notes_cache[note_id].get('categories', [])
+            
+            # Добавляем подменю для категорий
+            category_menu = context_menu.addMenu("🗂️ Добавить в категорию")
+            category_menu.setStyleSheet(theme["menu_style"])
+            
+            # Определяем доступные категории
+            categories = [
+                {"icon": "📓", "name": "Личное", "id": "personal"},
+                {"icon": "📚", "name": "Учеба", "id": "study"},
+                {"icon": "👔", "name": "Работа", "id": "work"},
+                {"icon": "🏡", "name": "Ежедневное", "id": "daily"}
+            ]
+            
+            # Проверяем, достигнут ли лимит категорий
+            if len(current_categories) >= 2:
+                category_menu.setEnabled(False)
+                category_menu.setTitle("🗂️ Добавить в категорию (достигнут лимит)")
+            else:
+                # Добавляем доступные категории в подменю
+                for category in categories:
+                    if category["id"] not in current_categories:
+                        action = category_menu.addAction(f"{category['icon']} {category['name']}")
+                        action.triggered.connect(lambda checked, cat=category["id"]: self.add_note_to_category(note_id, cat))
+            
+            # Добавляем действия для удаления из категорий
+            if current_categories:
+                remove_category_menu = context_menu.addMenu("🗑️ Убрать из категории")
+                remove_category_menu.setStyleSheet(theme["menu_style"])
+                
+                for cat_id in current_categories:
+                    # Находим информацию о категории
+                    category_info = next((c for c in categories if c["id"] == cat_id), None)
+                    if category_info:
+                        action = remove_category_menu.addAction(f"{category_info['icon']} {category_info['name']}")
+                        action.triggered.connect(lambda checked, cat=cat_id: self.remove_note_from_category(note_id, cat))
         else:
             # Если курсор над пустой областью
             new_action = context_menu.addAction(" ✏️ Создать запись ")
@@ -562,6 +612,76 @@ class NotesApp(QWidget):
         context_menu.exec(self.notes_list.mapToGlobal(position))
 
 
+    def add_note_to_category(self, note_id, category):
+        """Добавляет заметку в выбранную категорию"""
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                
+                # Проверяем, сколько категорий уже у заметки
+                cursor.execute("SELECT COUNT(*) FROM categories WHERE note_id = ?", (note_id,))
+                category_count = cursor.fetchone()[0]
+                
+                if category_count >= 2:
+                    QMessageBox.information(self, "Ограничение", "Заметка может быть добавлена максимум в 2 категории")
+                    return
+                
+                # Добавляем заметку в категорию
+                cursor.execute("INSERT OR IGNORE INTO categories (note_id, category) VALUES (?, ?)", 
+                            (note_id, category))
+                conn.commit()
+                
+                # Обновляем кэш
+                if note_id in self._notes_cache:
+                    categories = self._notes_cache[note_id].get('categories', [])
+                    if category not in categories:
+                        categories.append(category)
+                        self._notes_cache[note_id]['categories'] = categories
+                
+                # Перезагружаем список заметок
+                current_row = self.notes_list.currentRow()
+                self.load_notes()
+                
+                # Восстанавливаем выбор
+                for i in range(self.notes_list.count()):
+                    item = self.notes_list.item(i)
+                    if item and item.data(Qt.ItemDataRole.UserRole) == note_id:
+                        self.notes_list.setCurrentRow(i)
+                        break
+                
+        except sqlite3.Error as e:
+            QMessageBox.warning(self, "Ошибка", f"Не удалось добавить заметку в категорию: {str(e)}")
+
+    def remove_note_from_category(self, note_id, category):
+        """Удаляет заметку из выбранной категории"""
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM categories WHERE note_id = ? AND category = ?", 
+                            (note_id, category))
+                conn.commit()
+                
+                # Обновляем кэш
+                if note_id in self._notes_cache:
+                    categories = self._notes_cache[note_id].get('categories', [])
+                    if category in categories:
+                        categories.remove(category)
+                        self._notes_cache[note_id]['categories'] = categories
+                
+                # Перезагружаем список заметок
+                current_row = self.notes_list.currentRow()
+                self.load_notes()
+                
+                # Восстанавливаем выбор
+                for i in range(self.notes_list.count()):
+                    item = self.notes_list.item(i)
+                    if item and item.data(Qt.ItemDataRole.UserRole) == note_id:
+                        self.notes_list.setCurrentRow(i)
+                        break
+                
+        except sqlite3.Error as e:
+            QMessageBox.warning(self, "Ошибка", f"Не удалось удалить заметку из категории: {str(e)}")
+
     def apply_theme(self, theme_name):
         """Применяет выбранную тему к интерфейсу"""
         self.current_theme = theme_name
@@ -569,7 +689,12 @@ class NotesApp(QWidget):
         
         # Применяем стили из темы
         self.setStyleSheet(theme["main_window"])
-        self.notes_list.setStyleSheet(theme["notes_list"])
+        self.notes_list.setStyleSheet(theme["notes_list"] + """
+            QListWidget::item {
+                padding: 5px;
+                min-height: 40px;
+            }
+        """)
         self.search_bar.setStyleSheet(theme["search_bar"])
         self.editor_container.setStyleSheet(theme["editor_container"])
         self.text_editor.setStyleSheet(theme["text_editor"])
@@ -584,6 +709,7 @@ class NotesApp(QWidget):
         self.btn_new.setStyleSheet(theme["button_style"])
         self.btn_delete.setStyleSheet(theme["button_style"])
         self.sort_button.setStyleSheet(theme["sort_button"])
+        self.category_button.setStyleSheet(theme["sort_button"])  # Применяем тот же стиль, что и для кнопки сортировки
         self.settings_button.setStyleSheet(theme["settings_button"])
         self.spotify_button.setStyleSheet(theme["settings_button"])
         
@@ -847,9 +973,108 @@ class NotesApp(QWidget):
                 # Если колонки нет, добавляем ее
                 cursor.execute("ALTER TABLE notes ADD COLUMN pinned INTEGER DEFAULT 0")
             
+            # Создаем таблицу для категорий
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS categories (
+                    note_id INTEGER,
+                    category TEXT,
+                    PRIMARY KEY (note_id, category),
+                    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+                )
+            """)
+            
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_last_accessed ON notes(last_accessed)")
             cursor.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+            
+            # Добавляем настройку для текущей выбранной категории
+            cursor.execute("SELECT value FROM settings WHERE key = 'current_category'")
+            if not cursor.fetchone():
+                cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", 
+                            ("current_category", "all"))
+            
             conn.commit()
+
+    def show_category_menu(self):
+        """Показывает меню категорий заметок"""
+        category_menu = QMenu(self)
+        category_menu.setFont(QFont("Calibri", 9))
+        
+        theme = get_theme(self.current_theme)
+        category_menu.setStyleSheet(theme["menu_style"])
+        
+        # Получаем текущую выбранную категорию
+        current_category = "all"
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT value FROM settings WHERE key = 'current_category'")
+                result = cursor.fetchone()
+                if result:
+                    current_category = result[0]
+        except sqlite3.Error:
+            pass
+        
+        # Добавляем категории в меню
+        categories = [
+            {"icon": "📓", "name": "Личное", "id": "personal"},
+            {"icon": "📚", "name": "Учеба", "id": "study"},
+            {"icon": "👔", "name": "Работа", "id": "work"},
+            {"icon": "🏡", "name": "Ежедневное", "id": "daily"}
+        ]
+        
+        for category in categories:
+            action_text = f"{category['icon']} {category['name']}"
+            if current_category == category['id']:
+                action_text += "   ✓"
+            
+            action = category_menu.addAction(action_text)
+            action.triggered.connect(lambda checked, cat=category['id']: self.filter_by_category(cat))
+        
+        # Добавляем опцию "Без категории"
+        no_category_action = category_menu.addAction("🚫 Без категории")
+        if current_category == "no_category":
+            no_category_action.setText("🚫 Без категории   ✓")
+        no_category_action.triggered.connect(lambda: self.filter_by_category("no_category"))
+        
+        category_menu.addSeparator()
+        
+        # Добавляем опцию "Показать все"
+        all_action = category_menu.addAction("Убрать фильтр по категориям")
+        if current_category == "all":
+            all_action.setText("Убрать фильтр по категориям   ✓")
+        all_action.triggered.connect(lambda: self.filter_by_category("all"))
+        
+        # Показываем меню возле кнопки, но направленное вверх
+        menu_height = category_menu.sizeHint().height()
+        category_menu.exec(self.category_button.mapToGlobal(QPoint(0, -menu_height)))
+
+    def filter_by_category(self, category):
+        """Фильтрует список заметок по выбранной категории"""
+        # Сохраняем выбранную категорию
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", 
+                            ("current_category", category))
+                conn.commit()
+        except sqlite3.Error as e:
+            print(f"Ошибка при сохранении выбранной категории: {e}")
+        
+        # Сохраняем текущий выбранный элемент
+        current_id = None
+        if self.notes_list.currentItem():
+            current_id = self.notes_list.currentItem().data(Qt.ItemDataRole.UserRole)
+        
+        # Перезагружаем список заметок с учетом выбранной категории
+        self.load_notes()
+        
+        # Восстанавливаем выбор, если возможно
+        if current_id:
+            for i in range(self.notes_list.count()):
+                item = self.notes_list.item(i)
+                if item and item.data(Qt.ItemDataRole.UserRole) == current_id:
+                    self.notes_list.setCurrentRow(i)
+                    break
 
     def load_notes(self):
         """Загружает список заметок из базы данных"""
@@ -871,33 +1096,92 @@ class NotesApp(QWidget):
         except sqlite3.Error:
             pass
         
-        # Загружаем заметки из БД с учетом сортировки
+        # Получаем текущую выбранную категорию
+        current_category = "all"  # По умолчанию показываем все
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT value FROM settings WHERE key = 'current_category'")
+                result = cursor.fetchone()
+                if result:
+                    current_category = result[0]
+        except sqlite3.Error:
+            pass
+        
+        # Загружаем заметки из БД с учетом сортировки и категории
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
             
             # Сначала загружаем закрепленные заметки (всегда сверху)
-            cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 1 ORDER BY created_at DESC")
+            if current_category == "all":
+                # Показываем все закрепленные заметки
+                cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 1 ORDER BY created_at DESC")
+            elif current_category == "no_category":
+                # Показываем закрепленные заметки без категории
+                cursor.execute("""
+                    SELECT n.id, n.title, n.created_at 
+                    FROM notes n 
+                    WHERE n.pinned = 1 
+                    AND NOT EXISTS (SELECT 1 FROM categories c WHERE c.note_id = n.id)
+                    ORDER BY n.created_at DESC
+                """)
+            else:
+                # Показываем закрепленные заметки из выбранной категории
+                cursor.execute("""
+                    SELECT n.id, n.title, n.created_at 
+                    FROM notes n 
+                    JOIN categories c ON n.id = c.note_id 
+                    WHERE n.pinned = 1 AND c.category = ? 
+                    ORDER BY n.created_at DESC
+                """, (current_category,))
+            
             pinned_notes = cursor.fetchall()
             
-            # Затем загружаем обычные заметки с учетом сортировки
+            # Затем загружаем обычные заметки с учетом сортировки и категории
+            sort_clause = ""
             if current_sort == "date_desc":
-                cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 0 ORDER BY created_at DESC")
+                sort_clause = "ORDER BY n.created_at DESC"
             elif current_sort == "date_asc":
-                cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 0 ORDER BY created_at ASC")
+                sort_clause = "ORDER BY n.created_at ASC"
             elif current_sort == "name_asc":
-                cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 0 ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE ASC")
+                sort_clause = "ORDER BY CASE WHEN n.title = '' THEN 'Без названия' ELSE n.title END COLLATE NOCASE ASC"
             elif current_sort == "name_desc":
-                cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 0 ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE DESC")
+                sort_clause = "ORDER BY CASE WHEN n.title = '' THEN 'Без названия' ELSE n.title END COLLATE NOCASE DESC"
             elif current_sort == "modified_desc":
-                cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 0 ORDER BY last_accessed DESC")
+                sort_clause = "ORDER BY n.last_accessed DESC"
             else:  # modified_asc
-                cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 0 ORDER BY last_accessed ASC")
+                sort_clause = "ORDER BY n.last_accessed ASC"
+            
+            if current_category == "all":
+                # Показываем все обычные заметки
+                cursor.execute(f"SELECT id, title, created_at FROM notes WHERE pinned = 0 {sort_clause.replace('n.', '')}")
+            elif current_category == "no_category":
+                # Показываем обычные заметки без категории
+                cursor.execute(f"""
+                    SELECT n.id, n.title, n.created_at 
+                    FROM notes n 
+                    WHERE n.pinned = 0 
+                    AND NOT EXISTS (SELECT 1 FROM categories c WHERE c.note_id = n.id)
+                    {sort_clause}
+                """)
+            else:
+                # Показываем обычные заметки из выбранной категории
+                cursor.execute(f"""
+                    SELECT n.id, n.title, n.created_at 
+                    FROM notes n 
+                    JOIN categories c ON n.id = c.note_id 
+                    WHERE n.pinned = 0 AND c.category = ? 
+                    {sort_clause}
+                """, (current_category,))
             
             regular_notes = cursor.fetchall()
             
             # Добавляем закрепленные заметки в список
             for note in pinned_notes:
-                self._add_note_item(note, is_pinned=True)
+                # Получаем категории заметки
+                cursor.execute("SELECT category FROM categories WHERE note_id = ?", (note[0],))
+                categories = [row[0] for row in cursor.fetchall()]
+                self._add_note_item(note, is_pinned=True, categories=categories)
             
             # Добавляем разделитель, если есть и закрепленные и обычные заметки
             if pinned_notes and regular_notes:
@@ -909,9 +1193,13 @@ class NotesApp(QWidget):
             
             # Добавляем обычные заметки
             for note in regular_notes:
-                self._add_note_item(note, is_pinned=False)
+                # Получаем категории заметки
+                cursor.execute("SELECT category FROM categories WHERE note_id = ?", (note[0],))
+                categories = [row[0] for row in cursor.fetchall()]
+                self._add_note_item(note, is_pinned=False, categories=categories)
             
             self.check_empty_state()
+
 
 
     def load_note(self):
@@ -994,7 +1282,7 @@ class NotesApp(QWidget):
         """Показывает сообщение, когда нет заметок"""
         self.editor_container.hide()
         if not hasattr(self, 'empty_state_label') or not self.empty_state_label:
-            self.empty_state_label = QLabel("Записей пока нет!\nСоздайте новую запись, нажав на кнопку ✏️", self)
+            self.empty_state_label = QLabel("Записей пока нет!\n\nСоздайте новую запись, нажав на кнопку ✏️\nИли проверьте папку категорий 🗂️", self)
             self.empty_state_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.right_layout.addWidget(self.empty_state_label)
         
@@ -1787,6 +2075,57 @@ class NotesApp(QWidget):
         else:
             self._notes_cache[note_id]['pinned'] = is_pinned
 
+    def _add_note_item(self, note, is_pinned, categories=None):
+        """Добавляет элемент заметки в список"""
+        note_id = note[0]
+        title = note[1] if note[1] else "Без Названия"
+        date_obj = datetime.strptime(note[2].split('.')[0], '%Y-%m-%d %H:%M:%S')
+        date = f"{date_obj.day} {MONTHS[date_obj.month]} {date_obj.year} {date_obj.hour:02d}:{date_obj.minute:02d}"
+        
+        # Добавляем иконки категорий
+        category_icons = {
+            "personal": "📓",
+            "study": "📚",
+            "work": "👔",
+            "daily": "🏡"
+        }
+        
+        category_display = ""
+        if categories:
+            category_display = " ".join([category_icons.get(cat, "") for cat in categories[:2]])
+        
+        # Формируем заголовок с учетом закрепления и категорий
+        if is_pinned:
+            display_title = f"⭐ {category_display} {title}" if category_display else f"⭐ {title}"
+        else:
+            display_title = f"{category_display} {title}" if category_display else title
+        
+        item = QListWidgetItem()
+        item.setText(f"{display_title}\n{date}")
+        item.setData(Qt.ItemDataRole.UserRole, note_id)
+        
+        # Устанавливаем флаг, чтобы текст не обрезался
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemNeverHasChildren)
+        
+        # Устанавливаем специальный фон для закрепленных заметок в зависимости от темы
+        if is_pinned:
+            if self.current_theme == "light":
+                item.setBackground(QColor("#f1dbea"))  # Светлая тема, не выбрана
+            else:
+                item.setBackground(QColor("#484444"))  # Темная тема, не выбрана
+        
+        self.notes_list.addItem(item)
+        
+        # Обновляем кэш
+        if note_id not in self._notes_cache:
+            self._notes_cache[note_id] = {'title': note[1], 'content': None, 'pinned': is_pinned, 'categories': categories or []}
+        else:
+            self._notes_cache[note_id]['pinned'] = is_pinned
+            self._notes_cache[note_id]['categories'] = categories or []
+
+
+
+
     def on_item_selection_changed(self, current, previous):
         """Обрабатывает изменение выбора элемента в списке заметок"""
         # Обновляем цвета закрепленных заметок при изменении выбора
@@ -1811,6 +2150,7 @@ class NotesApp(QWidget):
                         item.setBackground(QColor("#858585"))  # Темная тема, выбрана
                     else:
                         item.setBackground(QColor("#484444"))  # Темная тема, не выбрана
+
 
 
 if __name__ == "__main__":

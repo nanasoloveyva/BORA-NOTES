@@ -669,30 +669,47 @@ class NotesApp(QWidget):
 
 
     def update_highlight_color(self):
+        doc = self.text_editor.document()
         highlight_color = QColor("#775c88") if self.current_theme == "dark" else QColor("#e4d5ff")
         old_highlight_color = QColor("#e4d5ff") if self.current_theme == "dark" else QColor("#775c88")
         
-        cursor = self.text_editor.textCursor()
-        current_position = cursor.position()
+        processed_blocks = 0
+        skipped_blocks = 0
         
-        doc_cursor = QTextCursor(self.text_editor.document())
-        doc_cursor.movePosition(QTextCursor.MoveOperation.Start)
+        cursor = QTextCursor(doc)
+        block = doc.firstBlock()
         
-        while not doc_cursor.atEnd():
-            doc_cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor)
+        while block.isValid():
+            cursor.setPosition(block.position())
+            has_relevant_formatting = False
             
-            char_format = doc_cursor.charFormat()
-            bg_color = char_format.background().color()
+            it = block.begin()
+            while not it.atEnd():
+                fragment = it.fragment()
+                if fragment.isValid():
+                    char_format = fragment.charFormat()
+                    bg_color = char_format.background().color()
+                    
+                    if bg_color.name() in [old_highlight_color.name(), "#e4d5ff", "#775c88"]:
+                        has_relevant_formatting = True
+                        break
+                it += 1
             
-            if bg_color.name() in [old_highlight_color.name(), "#e4d5ff", "#775c88"]:
+            if has_relevant_formatting:
+                cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+                cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock,
+                                QTextCursor.MoveMode.KeepAnchor)
+                
                 new_format = QTextCharFormat()
                 new_format.setBackground(highlight_color)
-                doc_cursor.mergeCharFormat(new_format)
+                cursor.mergeCharFormat(new_format)
+                
+                processed_blocks += 1
+            else:
+                skipped_blocks += 1
             
-            doc_cursor.clearSelection()
-        
-        cursor.setPosition(current_position)
-        self.text_editor.setTextCursor(cursor)
+            block = block.next()
+
 
     def load_theme_setting(self):
         try:
@@ -1592,10 +1609,12 @@ class NotesApp(QWidget):
     def update_color_button_state(self):
         has_selection = self.text_editor.textCursor().hasSelection()
         self.btn_color.setEnabled(has_selection)
+        self.btn_size.setEnabled(has_selection)  
         
         theme = get_theme(self.current_theme)
         if has_selection:
             self.btn_color.setStyleSheet(theme["button_style"])
+            self.btn_size.setStyleSheet(theme["button_style"])  
         else:
             if self.current_theme == "dark":
                 inactive_style = """
@@ -1622,6 +1641,7 @@ class NotesApp(QWidget):
                     }
                 """
             self.btn_color.setStyleSheet(inactive_style)
+            self.btn_size.setStyleSheet(inactive_style)  
 
     def show_size_menu(self):
         if not self.text_editor.textCursor().hasSelection():

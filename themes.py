@@ -217,10 +217,6 @@ def get_theme(theme_name):
             "message_box": "QMessageBox { background-color: #EDE7F6; } QPushButton { width: 120px; height: 30px; border-radius: 4px; background-color: #EDE7F6; border: 0.5px solid #efe2e7; padding: 5px 15px; } QPushButton:hover { background-color: #d9cdf0; } QCheckBox { background-color: #EDE7F6; }"
         },
         
-
-
-
-
         "dark": {
             "main_window": "* { font-family: Calibri; } QWidget { background-color: #1E1E1E; border-radius: 8px; }",
             "notes_list": """

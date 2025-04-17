@@ -36,7 +36,7 @@ class CustomTextEdit(QTextEdit):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.default_font = QFont("Calibri", 11) # ВОТ ТУТ
+        self.default_font = QFont("Calibri", 11)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_custom_context_menu)
 
@@ -157,7 +157,7 @@ class CustomTextEdit(QTextEdit):
         merch_action.triggered.connect(lambda: self.insert_special_character("💸"))
 
         custom_menu.exec(self.mapToGlobal(position))
-    
+
     def apply_formatting(self, format_type):
         """Применяет выбранное форматирование к выделенному тексту"""
         cursor = self.textCursor()
@@ -195,7 +195,7 @@ class CustomTextEdit(QTextEdit):
         cursor.insertText(character)
         self.setTextCursor(cursor)
 
-    def clear_formatting(self):
+    def clear_formatting(self, format_type=None):
         """Очищает форматирование выделенного текста"""
         cursor = self.textCursor()
         format = QTextCharFormat()
@@ -505,7 +505,7 @@ class NotesApp(QWidget):
         QDesktopServices.openUrl(QUrl("https://open.spotify.com/collection/tracks"))
 
     def update_note_title(self):
-        """Обновляет заголовок текущей заметки в списке и сохраняет его немедленно"""
+        """Обновляет заголовок текущей заметки в списке"""
         if not self.current_note_id:
             return
             
@@ -523,21 +523,8 @@ class NotesApp(QWidget):
                 item.setText(f"{display_title}\n{date_line}")
                 break
         
-        # Обновляем кэш
         if self.current_note_id in self._notes_cache:
             self._notes_cache[self.current_note_id]['title'] = title
-        
-        # Немедленно сохраняем заголовок в базу данных
-        try:
-            with sqlite3.connect(DB_FILE) as conn:
-                cursor = conn.cursor()
-                cursor.execute("UPDATE notes SET title = ? WHERE id = ?", 
-                            (title, self.current_note_id))
-                conn.commit()
-        except sqlite3.Error as e:
-            print(f"Ошибка при сохранении заголовка: {e}")
-
-
 
     def show_notes_list_context_menu(self, position):
         """Показывает контекстное меню для списка заметок"""
@@ -589,8 +576,6 @@ class NotesApp(QWidget):
         self.title_input.setStyleSheet(theme["title_input"])
         self.separator.setStyleSheet(theme["separator"])
         self.counter_label.setStyleSheet(theme["counter_label"])
-        
-        # Обновляем стиль для пустого состояния, если оно существует
         if hasattr(self, 'empty_state_label') and self.empty_state_label:
             self.empty_state_label.setStyleSheet(theme["empty_state_label"])
         
@@ -633,7 +618,6 @@ class NotesApp(QWidget):
         
         self.update_highlight_color()
         self.save_theme_setting(theme_name)
-
 
 
     def update_highlight_color(self):

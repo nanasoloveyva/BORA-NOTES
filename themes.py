@@ -180,6 +180,39 @@ def get_theme(theme_name):
                     font-size: 11px;
                 }
             """,
+
+             "dialog_style": """
+                QDialog {
+                    background-color: #ffffff;
+                    color: #2f2f2f;
+                }
+                QLabel {
+                    color: #2f2f2f;
+                    font-family: Calibri;
+                }
+                QLineEdit {
+                    background-color: #f9f9f9;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 3px;
+                    padding: 4px;
+                    color: #2f2f2f;
+                    font-family: Calibri;
+                }
+                QPushButton {
+                    background-color: #f0f0f0;
+                    border: none;
+                    border-radius: 3px;
+                    padding: 5px 10px;
+                    color: #2f2f2f;
+                    font-family: Calibri;
+                }
+                QPushButton:hover {
+                    background-color: #e0e0e0;
+                }
+                QPushButton:pressed {
+                    background-color: #d0d0d0;
+                }
+            """,
             
             "message_box": "QMessageBox { background-color: #EDE7F6; } QPushButton { width: 120px; height: 30px; border-radius: 4px; background-color: #EDE7F6; border: 0.5px solid #efe2e7; padding: 5px 15px; } QPushButton:hover { background-color: #d9cdf0; } QCheckBox { background-color: #EDE7F6; }"
         },
@@ -357,6 +390,39 @@ def get_theme(theme_name):
                     border-radius: 3px;
                     font-family: Calibri;
                     font-size: 11px;
+                }
+            """,
+
+             "dialog_style": """
+                QDialog {
+                    background-color: #2f2f2f;
+                    color: #ffffff;
+                }
+                QLabel {
+                    color: #ffffff;
+                    font-family: Calibri;
+                }
+                QLineEdit {
+                    background-color: #3a3a3a;
+                    border: 1px solid #555555;
+                    border-radius: 3px;
+                    padding: 4px;
+                    color: #ffffff;
+                    font-family: Calibri;
+                }
+                QPushButton {
+                    background-color: #555555;
+                    border: none;
+                    border-radius: 3px;
+                    padding: 5px 10px;
+                    color: #ffffff;
+                    font-family: Calibri;
+                }
+                QPushButton:hover {
+                    background-color: #666666;
+                }
+                QPushButton:pressed {
+                    background-color: #777777;
                 }
             """,
             

@@ -1,7 +1,6 @@
 def get_theme(theme_name):
     """
-    Возвращает словарь со стилями для указанной темы.
-    
+
     Args:
         theme_name (str): Название темы ('light', 'dark')
         

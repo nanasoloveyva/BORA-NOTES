@@ -11,7 +11,7 @@ from PyQt6.QtGui import (
     QFont, QIcon, QTextCursor, QTextCharFormat, QShortcut, QKeySequence, QColor,
     QDesktopServices, QTextFrameFormat, QTextBlockFormat
 )
-from PyQt6.QtCore import Qt, QTimer, QMimeData, QPoint, QUrl
+from PyQt6.QtCore import Qt, QTimer, QMimeData, QPoint, QUrl, QSize
 
 from themes import get_theme
 from about import get_about_content, get_about_title
@@ -294,6 +294,7 @@ class NotesApp(QWidget):
         # Список заметок
         self.notes_list = QListWidget()
         self.notes_list.itemClicked.connect(self.load_note)
+        self.notes_list.currentItemChanged.connect(self.on_item_selection_changed) 
         self.notes_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.notes_list.customContextMenuRequested.connect(self.show_notes_list_context_menu)
         left_layout.addWidget(self.notes_list)
@@ -504,24 +505,39 @@ class NotesApp(QWidget):
         QDesktopServices.openUrl(QUrl("https://open.spotify.com/collection/tracks"))
 
     def update_note_title(self):
-        """Обновляет заголовок текущей заметки в списке"""
+        """Обновляет заголовок текущей заметки в списке и сохраняет его немедленно"""
         if not self.current_note_id:
             return
             
         title = self.title_input.text().strip()
+        is_pinned = self._notes_cache[self.current_note_id].get('pinned', False)
         
         # Обновляем заголовок в списке
         for i in range(self.notes_list.count()):
             item = self.notes_list.item(i)
-            if item.data(Qt.ItemDataRole.UserRole) == self.current_note_id:
+            if item and item.data(Qt.ItemDataRole.UserRole) == self.current_note_id:
                 current_text = item.text()
                 date_line = current_text.split('\n')[1] if '\n' in current_text else ""
                 new_title = title if title else "Без Названия"
-                item.setText(f"{new_title}\n{date_line}")
+                display_title = f"⭐ {new_title}" if is_pinned else new_title
+                item.setText(f"{display_title}\n{date_line}")
                 break
         
+        # Обновляем кэш
         if self.current_note_id in self._notes_cache:
             self._notes_cache[self.current_note_id]['title'] = title
+        
+        # Немедленно сохраняем заголовок в базу данных
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE notes SET title = ? WHERE id = ?", 
+                            (title, self.current_note_id))
+                conn.commit()
+        except sqlite3.Error as e:
+            print(f"Ошибка при сохранении заголовка: {e}")
+
+
 
     def show_notes_list_context_menu(self, position):
         """Показывает контекстное меню для списка заметок"""
@@ -534,6 +550,21 @@ class NotesApp(QWidget):
         
         if item:
             # Если курсор над элементом списка
+            note_id = item.data(Qt.ItemDataRole.UserRole)
+            is_pinned = self._notes_cache[note_id].get('pinned', False)
+            
+            # Проверяем количество закрепленных заметок
+            pinned_count = sum(1 for note in self._notes_cache.values() if note.get('pinned', False))
+            
+            # Добавляем действие для закрепления/открепления
+            pin_action = context_menu.addAction("⭐ Открепить" if is_pinned else "⭐ Закрепить")
+            pin_action.triggered.connect(lambda: self.toggle_pin_status(note_id))
+            
+            # Делаем кнопку неактивной, если достигнут лимит закрепленных заметок
+            if not is_pinned and pinned_count >= 3:
+                pin_action.setEnabled(False)
+                pin_action.setText("⭐ Закрепить (достигнут лимит)")
+            
             delete_action = context_menu.addAction(" ❌ Удалить запись ")
             delete_action.triggered.connect(self.delete_note)
         else:
@@ -542,6 +573,7 @@ class NotesApp(QWidget):
             new_action.triggered.connect(self.new_note)
         
         context_menu.exec(self.notes_list.mapToGlobal(position))
+
 
     def apply_theme(self, theme_name):
         """Применяет выбранную тему к интерфейсу"""
@@ -579,8 +611,29 @@ class NotesApp(QWidget):
 
         QApplication.instance().setStyleSheet(theme["tooltip_style"])
         
+        # Обновляем стиль закрепленных заметок
+        current_item = self.notes_list.currentItem()
+        for i in range(self.notes_list.count()):
+            item = self.notes_list.item(i)
+            if item and item.data(Qt.ItemDataRole.UserRole) in self._notes_cache:
+                note_id = item.data(Qt.ItemDataRole.UserRole)
+                if self._notes_cache[note_id].get('pinned', False):
+                    is_selected = (item == current_item)
+                    
+                    if theme_name == "light":
+                        if is_selected:
+                            item.setBackground(QColor("#eecbe3"))  # Светлая тема, выбрана
+                        else:
+                            item.setBackground(QColor("#f1dbea"))  # Светлая тема, не выбрана
+                    else:
+                        if is_selected:
+                            item.setBackground(QColor("#858585"))  # Темная тема, выбрана
+                        else:
+                            item.setBackground(QColor("#484444"))  # Темная тема, не выбрана
+        
         self.update_highlight_color()
         self.save_theme_setting(theme_name)
+
 
 
     def update_highlight_color(self):
@@ -802,6 +855,14 @@ class NotesApp(QWidget):
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
             cursor.execute("CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, created_at TEXT, last_accessed TEXT)")
+            
+            # Проверяем, существует ли уже колонка pinned
+            try:
+                cursor.execute("SELECT pinned FROM notes LIMIT 1")
+            except sqlite3.OperationalError:
+                # Если колонки нет, добавляем ее
+                cursor.execute("ALTER TABLE notes ADD COLUMN pinned INTEGER DEFAULT 0")
+            
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_last_accessed ON notes(last_accessed)")
             cursor.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
             conn.commit()
@@ -809,6 +870,10 @@ class NotesApp(QWidget):
     def load_notes(self):
         """Загружает список заметок из базы данных"""
         self.notes_list.clear()
+        
+        # Устанавливаем режим переноса текста и запрещаем обрезание
+        self.notes_list.setWordWrap(True)
+        self.notes_list.setUniformItemSizes(False)
         
         # Получаем текущий способ сортировки
         current_sort = "date_desc"  # По умолчанию
@@ -822,50 +887,48 @@ class NotesApp(QWidget):
         except sqlite3.Error:
             pass
         
-        # Получаем актуальные ID заметок из БД с учетом сортировки
+        # Загружаем заметки из БД с учетом сортировки
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
             
+            # Сначала загружаем закрепленные заметки (всегда сверху)
+            cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 1 ORDER BY created_at DESC")
+            pinned_notes = cursor.fetchall()
+            
+            # Затем загружаем обычные заметки с учетом сортировки
             if current_sort == "date_desc":
-                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY created_at DESC")
+                cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 0 ORDER BY created_at DESC")
             elif current_sort == "date_asc":
-                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY created_at ASC")
+                cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 0 ORDER BY created_at ASC")
             elif current_sort == "name_asc":
-                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE ASC")
+                cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 0 ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE ASC")
             elif current_sort == "name_desc":
-                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE DESC")
+                cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 0 ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE DESC")
             elif current_sort == "modified_desc":
-                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY last_accessed DESC")
+                cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 0 ORDER BY last_accessed DESC")
             else:  # modified_asc
-                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY last_accessed ASC")
+                cursor.execute("SELECT id, title, created_at FROM notes WHERE pinned = 0 ORDER BY last_accessed ASC")
             
-            current_ids = set()
+            regular_notes = cursor.fetchall()
             
-            for note in cursor.fetchall():
-                note_id = note[0]
-                current_ids.add(note_id)
-                
-                # Форматирование данных
-                title = note[1] if note[1] else "Без Названия"
-                date_obj = datetime.strptime(note[2].split('.')[0], '%Y-%m-%d %H:%M:%S')
-                date = f"{date_obj.day} {MONTHS[date_obj.month]} {date_obj.year} {date_obj.hour:02d}:{date_obj.minute:02d}"
+            # Добавляем закрепленные заметки в список
+            for note in pinned_notes:
+                self._add_note_item(note, is_pinned=True)
+            
+            # Добавляем разделитель, если есть и закрепленные и обычные заметки
+            if pinned_notes and regular_notes:
+                separator = QListWidgetItem()
+                separator.setFlags(Qt.ItemFlag.NoItemFlags)
+                separator.setSizeHint(QSize(self.notes_list.width() - 10, 1))
+                separator.setBackground(QColor("#e0e0e0" if self.current_theme == "light" else "#444"))
+                self.notes_list.addItem(separator)
+            
+            # Добавляем обычные заметки
+            for note in regular_notes:
+                self._add_note_item(note, is_pinned=False)
+            
+            self.check_empty_state()
 
-                # Создание элемента списка
-                item = QListWidgetItem()
-                item.setText(f"{title}\n{date}")
-                item.setData(Qt.ItemDataRole.UserRole, note_id)
-                self.notes_list.addItem(item)
-                
-                # Обновляем кэш только для новых заметок
-                if note_id not in self._notes_cache:
-                    self._notes_cache[note_id] = {'title': note[1], 'content': None}
-
-        # Очищаем кэш от удаленных заметок
-        for cached_id in list(self._notes_cache.keys()):
-            if cached_id not in current_ids:
-                del self._notes_cache[cached_id]
-        
-        self.check_empty_state()
 
     def load_note(self):
         """Загружает выбранную заметку для редактирования"""
@@ -977,7 +1040,14 @@ class NotesApp(QWidget):
         self.current_note_id = note_id
         self.title_input.clear()
         self.text_editor.clear()
-        self.notes_list.setCurrentRow(0)
+        
+        # Находим и выбираем новую заметку в списке
+        for i in range(self.notes_list.count()):
+            item = self.notes_list.item(i)
+            if item and item.data(Qt.ItemDataRole.UserRole) == note_id:
+                self.notes_list.setCurrentItem(item)
+                break
+                
         self.check_empty_state()
 
     def delete_note(self):
@@ -1235,44 +1305,21 @@ class NotesApp(QWidget):
         except sqlite3.Error as e:
             print(f"Ошибка при сохранении способа сортировки: {e}")
         
-        with sqlite3.connect(DB_FILE) as conn:
-            cursor = conn.cursor()
-            
-            if sort_type == "date_desc":
-                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY created_at DESC")
-            elif sort_type == "date_asc":
-                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY created_at ASC")
-            elif sort_type == "name_asc":
-                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE ASC")
-            elif sort_type == "name_desc":
-                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY CASE WHEN title = '' THEN 'Без названия' ELSE title END COLLATE NOCASE DESC")
-            elif sort_type == "modified_desc":
-                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY last_accessed DESC")
-            else:  # modified_asc
-                cursor.execute("SELECT id, title, created_at FROM notes ORDER BY last_accessed ASC")
-            
-            # Сохраняем текущий выбранный элемент
-            current_id = None
-            if self.notes_list.currentItem():
-                current_id = self.notes_list.currentItem().data(Qt.ItemDataRole.UserRole)
-            
-            self.notes_list.clear()
-            for note in cursor.fetchall():
-                title = note[1] if note[1] else "Без названия"
-                date_obj = datetime.strptime(note[2].split('.')[0], '%Y-%m-%d %H:%M:%S')
-                date = f"{date_obj.day} {MONTHS[date_obj.month]} {date_obj.year} {date_obj.hour:02d}:{date_obj.minute:02d}"
-
-                item = QListWidgetItem()
-                item.setText(f"{title}\n{date}")
-                item.setData(Qt.ItemDataRole.UserRole, note[0])
-                self.notes_list.addItem(item)
-            
-            # Восстанавливаем выбор, если возможно
-            if current_id:
-                for i in range(self.notes_list.count()):
-                    if self.notes_list.item(i).data(Qt.ItemDataRole.UserRole) == current_id:
-                        self.notes_list.setCurrentRow(i)
-                        break
+        # Сохраняем текущий выбранный элемент
+        current_id = None
+        if self.notes_list.currentItem():
+            current_id = self.notes_list.currentItem().data(Qt.ItemDataRole.UserRole)
+        
+        # Перезагружаем список заметок с учетом новой сортировки
+        self.load_notes()
+        
+        # Восстанавливаем выбор, если возможно
+        if current_id:
+            for i in range(self.notes_list.count()):
+                item = self.notes_list.item(i)
+                if item and item.data(Qt.ItemDataRole.UserRole) == current_id:
+                    self.notes_list.setCurrentRow(i)
+                    break
 
 
     def show_color_palette(self):
@@ -1681,7 +1728,105 @@ class NotesApp(QWidget):
             self.btn_color.setStyleSheet(inactive_style)
             self.btn_size.setStyleSheet(inactive_style)
 
+    def toggle_pin_status(self, note_id):
+        """Переключает статус закрепления заметки"""
+        # Получаем текущее количество закрепленных заметок
+        pinned_count = sum(1 for note in self._notes_cache.values() if note.get('pinned', False))
+        
+        # Проверяем статус текущей заметки
+        is_currently_pinned = self._notes_cache[note_id].get('pinned', False)
+        
+        if not is_currently_pinned and pinned_count >= 3:
+            QMessageBox.information(self, "Ошибка", "Можно закрепить не более 3 заметок")
+            return
+        
+        # Обновляем статус в базе данных
+        new_pinned_status = 0 if is_currently_pinned else 1
+        try:
+            with sqlite3.connect(DB_FILE) as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE notes SET pinned = ? WHERE id = ?",
+                            (new_pinned_status, note_id))
+                conn.commit()
+                
+                # Обновляем кэш
+                self._notes_cache[note_id]['pinned'] = not is_currently_pinned
+                
+                # Перезагружаем список заметок
+                self.load_notes()
+                
+                # Выбираем текущую заметку в обновленном списке
+                for i in range(self.notes_list.count()):
+                    item = self.notes_list.item(i)
+                    if item and item.data(Qt.ItemDataRole.UserRole) == note_id:
+                        self.notes_list.setCurrentItem(item)
+                        break
+            
+        except sqlite3.Error as e:
+            QMessageBox.warning(self, "Ошибка", f"Не удалось обновить статус закрепления: {str(e)}")
 
+    def _add_note_item(self, note, is_pinned):
+        """Добавляет элемент заметки в список"""
+        note_id = note[0]
+        title = note[1] if note[1] else "Без Названия"
+        date_obj = datetime.strptime(note[2].split('.')[0], '%Y-%m-%d %H:%M:%S')
+        date = f"{date_obj.day} {MONTHS[date_obj.month]} {date_obj.year} {date_obj.hour:02d}:{date_obj.minute:02d}"
+        
+        # Добавляем звездочку для закрепленных заметок
+        display_title = f"⭐ {title}" if is_pinned else title
+        
+        item = QListWidgetItem()
+        item.setText(f"{display_title}\n{date}")
+        item.setData(Qt.ItemDataRole.UserRole, note_id)
+        
+        # Устанавливаем флаг, чтобы текст не обрезался
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemNeverHasChildren)
+        
+        # Устанавливаем специальный фон для закрепленных заметок в зависимости от темы
+        if is_pinned:
+            if self.current_theme == "light":
+                item.setBackground(QColor("#f1dbea"))  # Светлая тема, не выбрана
+            else:
+                item.setBackground(QColor("#484444"))  # Темная тема, не выбрана
+        
+        self.notes_list.addItem(item)
+        
+        # Обновляем кэш
+        if note_id not in self._notes_cache:
+            self._notes_cache[note_id] = {'title': note[1], 'content': None, 'pinned': is_pinned}
+        else:
+            self._notes_cache[note_id]['pinned'] = is_pinned
+        
+        # Обновляем кэш
+        if note_id not in self._notes_cache:
+            self._notes_cache[note_id] = {'title': note[1], 'content': None, 'pinned': is_pinned}
+        else:
+            self._notes_cache[note_id]['pinned'] = is_pinned
+
+    def on_item_selection_changed(self, current, previous):
+        """Обрабатывает изменение выбора элемента в списке заметок"""
+        # Обновляем цвета закрепленных заметок при изменении выбора
+        for i in range(self.notes_list.count()):
+            item = self.notes_list.item(i)
+            if not item or not item.data(Qt.ItemDataRole.UserRole) in self._notes_cache:
+                continue
+                
+            note_id = item.data(Qt.ItemDataRole.UserRole)
+            is_pinned = self._notes_cache[note_id].get('pinned', False)
+            
+            if is_pinned:
+                is_selected = (item == current)
+                
+                if self.current_theme == "light":
+                    if is_selected:
+                        item.setBackground(QColor("#eecbe3"))  # Светлая тема, выбрана
+                    else:
+                        item.setBackground(QColor("#f1dbea"))  # Светлая тема, не выбрана
+                else:
+                    if is_selected:
+                        item.setBackground(QColor("#858585"))  # Темная тема, выбрана
+                    else:
+                        item.setBackground(QColor("#484444"))  # Темная тема, не выбрана
 
 
 if __name__ == "__main__":

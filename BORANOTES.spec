@@ -1,12 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-import shutil  
-from pathlib import Path
-
-def remove_build_folder():
-    build_path = Path('build')  
-    if build_path.exists():    
-        shutil.rmtree(build_path) 
 
 a = Analysis(
     ['boranotes.py'],
@@ -21,7 +14,6 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
-
 pyz = PYZ(a.pure)
 
 exe = EXE(
@@ -44,7 +36,4 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['icon.ico'],
-    manifest='manifest.xml'
 )
-
-remove_build_folder()
